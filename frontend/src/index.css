@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #d4af37;
+  --color-accent-purple: #4b0082;
+  --color-background-light: #f6f6f8;
+  --color-background-dark: #0a0a0f;
+  --color-card-dark: #16161f;
+  --color-border-dark: #2d2d3a;
+  --font-display: "Inter", sans-serif;
+}
+
+@layer utilities {
+  .neon-glow {
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+  }
+
+  .neon-glow-purple {
+    box-shadow: 0 0 15px rgba(75, 0, 130, 0.3);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #0a0a0f;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #2d2d3a;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #d4af37;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  @apply bg-background-dark text-slate-100 min-h-screen;
+  background: radial-gradient(circle at top right, #1e1b4b, #0a0a0f);
+}
+
+@layer components {
+  .ygo-card-border {
+    border: 1px solid rgba(177, 145, 73, 0.3);
+    background: linear-gradient(145deg, rgba(22, 22, 37, 0.9), rgba(45, 27, 78, 0.4));
+    border-radius: 0.25rem;
+  }
+
+  .sidebar-item:hover {
+    background: linear-gradient(90deg, rgba(177, 145, 73, 0.1) 0%, transparent 100%);
+  }
+}

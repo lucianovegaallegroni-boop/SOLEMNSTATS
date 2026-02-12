@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.sqlite3
+backend/media/
+backend/static/
+*.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# General
+.env
+.gemini/
