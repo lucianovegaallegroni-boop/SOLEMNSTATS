@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { API_BASE_URL } from '../config'
 
 function EditDeck() {
     const { id } = useParams()
@@ -14,13 +15,13 @@ function EditDeck() {
 
     // Fetch and Autocomplete (same as before)
     useEffect(() => {
-        fetch(`http://127.0.0.1:8000/api/get-deck/${id}/`)
+        fetch(`${API_BASE_URL}/api/deck/${id}`)
             .then(res => res.json())
             .then(data => {
                 setDeckName(data.name)
                 const lists = { MAIN: [], EXTRA: [], SIDE: [] } as any;
                 data.cards.forEach((card: any) => {
-                    const line = `${card.card_name} x${card.quantity}`;
+                    const line = `${card.cardName} x${card.quantity}`;
                     if (card.area === 'EXTRA') lists.EXTRA.push(line);
                     else if (card.area === 'SIDE') lists.SIDE.push(line);
                     else lists.MAIN.push(line);
@@ -49,7 +50,7 @@ function EditDeck() {
         }
 
         const timer = setTimeout(() => {
-            fetch(`http://127.0.0.1:8000/api/search-cards/?q=${lastLine}`)
+            fetch(`${API_BASE_URL}/api/search-cards?q=${lastLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 5)))
                 .catch(err => console.error('Search error:', err));
@@ -123,7 +124,7 @@ function EditDeck() {
 
         setIsSaving(true);
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/get-deck/${id}/`, {
+            const response = await fetch(`${API_BASE_URL}/api/deck/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -196,7 +197,7 @@ function EditDeck() {
                                     {area} Deck
                                 </h3>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${area === 'MAIN' ? 'bg-primary/10 text-primary' :
-                                        getSectionCount(deckLists[area]) > 15 ? 'bg-red-500/10 text-red-500' : 'bg-slate-700 text-slate-300'
+                                    getSectionCount(deckLists[area]) > 15 ? 'bg-red-500/10 text-red-500' : 'bg-slate-700 text-slate-300'
                                     }`}>
                                     {getSectionCount(deckLists[area])} cards
                                 </span>

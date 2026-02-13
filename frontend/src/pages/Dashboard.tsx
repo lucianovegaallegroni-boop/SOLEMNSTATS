@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '../config'
 
 function Dashboard() {
     const { id } = useParams<{ id: string }>()
@@ -30,14 +31,14 @@ function Dashboard() {
 
     const fetchDeck = () => {
         setLoading(true)
-        fetch(`http://127.0.0.1:8000/api/get-deck/${id}/`)
+        fetch(`${API_BASE_URL}/api/deck/${id}`)
             .then(res => res.json())
             .then(data => {
                 setDeck(data)
                 // Inicializar mano SOLO con cartas del MAIN DECK
                 if (data.cards && Array.isArray(data.cards)) {
                     const mainCards = data.cards.filter((c: any) => c.area === 'MAIN').flatMap((card: any) =>
-                        Array(Math.max(1, parseInt(card.quantity) || 1)).fill(card)
+                        Array(Math.max(1, parseInt(card.quantity) || 1)).fill({ ...card, card_name: card.cardName, image_url: card.imageUrl, card_type: card.cardType, custom_tags: card.customTags })
                     );
                     shuffleAndDraw(mainCards);
                 }
@@ -57,14 +58,14 @@ function Dashboard() {
 
         let currentTags: string[] = [];
         try {
-            currentTags = safeMsgParse(card.custom_tags);
+            currentTags = safeMsgParse(card.customTags || card.custom_tags);
         } catch (e) { currentTags = []; }
 
         const newTags = currentTags.includes(tag)
             ? currentTags.filter((t: string) => t !== tag)
             : [...currentTags, tag];
 
-        fetch(`http://127.0.0.1:8000/api/update-card-tags/${cardId}/`, {
+        fetch(`${API_BASE_URL}/api/update-card-tags/${cardId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tags: newTags })
@@ -88,7 +89,7 @@ function Dashboard() {
 
     // Procesar estadísticas reales del mazo
     const stats = deck && deck.cards ? deck.cards.reduce((acc: any, card: any) => {
-        const type = (card.card_type || 'Unknown').toLowerCase();
+        const type = ((card.cardType || card.card_type) || 'Unknown').toLowerCase();
         const qty = card.quantity || 1;
 
         if (type.includes('monster')) acc.monsters += qty;
@@ -158,7 +159,8 @@ function Dashboard() {
                 <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
                     {areaCards.map((card: any) => (
                         Array(card.quantity).fill(card).map((_, i) => {
-                            const tags = card.custom_tags ? JSON.parse(card.custom_tags) : [];
+                            const rawTags = card.customTags || card.custom_tags;
+                            const tags = rawTags ? JSON.parse(rawTags) : [];
                             // Find the first tag that has a color mapping, or default to primary
                             const activeBorderColor = tags.find((t: string) => tagColors[t])
                                 ? tagColors[tags.find((t: string) => tagColors[t])!]
@@ -171,8 +173,8 @@ function Dashboard() {
                                     onClick={() => handleCardClick(card)}
                                 >
                                     <img
-                                        src={card.image_url || 'https://images.ygoprodeck.com/images/cards/back_high.jpg'}
-                                        alt={card.card_name}
+                                        src={(card.imageUrl || card.image_url) || 'https://images.ygoprodeck.com/images/cards/back_high.jpg'}
+                                        alt={card.cardName || card.card_name}
                                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                                         loading="lazy"
                                     />
@@ -187,7 +189,7 @@ function Dashboard() {
 
                                     {/* Hover Overlay */}
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1">
-                                        <span className="text-[7px] font-black text-white uppercase truncate">{card.card_name}</span>
+                                        <span className="text-[7px] font-black text-white uppercase truncate">{card.cardName || card.card_name}</span>
                                         {tagMode && (
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 px-2 py-1 rounded text-[8px] font-black uppercase text-white border border-white/20 whitespace-nowrap">
                                                 {tags.includes(tagMode) ? 'Remove' : 'Add'} {tagMode}
@@ -209,7 +211,7 @@ function Dashboard() {
                 <div>
                     <h1 className="text-4xl font-black italic uppercase text-white leading-none">{deck.name}</h1>
                     <p className="text-slate-500 font-bold uppercase tracking-widest text-[11px] mt-2">
-                        Real-Time Analysis • {deck.total_cards} Cards • Database Connected
+                        Real-Time Analysis • {deck.totalCards || deck.total_cards} Cards • Database Connected
                     </p>
                 </div>
                 <div className="text-right flex flex-col items-end gap-2">
@@ -250,7 +252,7 @@ function Dashboard() {
                         <div className="bg-card-dark border border-primary/20 rounded-xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-start mb-6">
                                 <div>
-                                    <h3 className="text-xl font-black italic uppercase text-white">{selectedCard.card_name}</h3>
+                                    <h3 className="text-xl font-black italic uppercase text-white">{selectedCard.cardName || selectedCard.card_name}</h3>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Assign categories for analysis</p>
                                 </div>
                                 <button onClick={() => setIsTagModalOpen(false)} className="text-slate-500 hover:text-white transition-colors">
@@ -259,11 +261,11 @@ function Dashboard() {
                             </div>
 
                             <div className="flex gap-4 mb-8">
-                                <img src={selectedCard.image_url} alt={selectedCard.card_name} className="w-24 rounded border border-white/10" />
+                                <img src={selectedCard.imageUrl || selectedCard.image_url} alt={selectedCard.cardName || selectedCard.card_name} className="w-24 rounded border border-white/10" />
                                 <div className="flex-1 space-y-2">
                                     <div className="text-[9px] font-black text-primary uppercase tracking-tighter">Current Tags:</div>
                                     <div className="flex flex-wrap gap-2">
-                                        {safeMsgParse(selectedCard.custom_tags).map((tag: string) => (
+                                        {safeMsgParse(selectedCard.customTags || selectedCard.custom_tags).map((tag: string) => (
                                             <span key={tag} className="bg-primary text-background-dark text-[10px] font-black px-2 py-1 rounded uppercase flex items-center gap-1">
                                                 {tag}
                                                 <span className="material-icons text-[12px] cursor-pointer" onClick={() => toggleTag(selectedCard.id, tag)}>close</span>
@@ -280,7 +282,7 @@ function Dashboard() {
                                         <button
                                             key={cat}
                                             onClick={() => toggleTag(selectedCard.id, cat)}
-                                            className={`py-2 px-3 rounded text-[10px] font-black uppercase transition-all border ${safeMsgParse(selectedCard.custom_tags).includes(cat) ? 'bg-primary text-background-dark border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-primary/50'}`}
+                                            className={`py-2 px-3 rounded text-[10px] font-black uppercase transition-all border ${safeMsgParse(selectedCard.customTags || selectedCard.custom_tags).includes(cat) ? 'bg-primary text-background-dark border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-primary/50'}`}
                                         >
                                             {cat}
                                         </button>
@@ -302,7 +304,7 @@ function Dashboard() {
                                 <circle cx="18" cy="18" fill="none" r="16" stroke="#fb923c" strokeDasharray={`${monsterPct} 100`} strokeWidth="3"></circle>
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                <span className="text-2xl font-black italic">{deck.total_cards}</span>
+                                <span className="text-2xl font-black italic">{deck.totalCards || deck.total_cards}</span>
                                 <span className="text-[9px] uppercase text-primary font-bold tracking-tighter">Cards</span>
                             </div>
                         </div>
@@ -335,7 +337,7 @@ function Dashboard() {
                         ].map(config => {
                             const cat = config.name;
                             const taggedCards = (deck.cards || []).filter((c: any) => {
-                                return safeMsgParse(c.custom_tags).includes(cat);
+                                return safeMsgParse(c.customTags || c.custom_tags).includes(cat);
                             });
                             const countInDeck = taggedCards.reduce((acc: number, c: any) => acc + (c.quantity || 1), 0);
                             const N = (deck.cards || []).filter((c: any) => c.area === 'MAIN').reduce((acc: number, c: any) => acc + (c.quantity || 1), 0) || 1;
@@ -394,9 +396,9 @@ function Dashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                     {hand.map((card, idx) => (
                         <div key={idx} className="aspect-[2.5/3.6] relative group overflow-hidden rounded border border-primary/20">
-                            <img src={card.image_url} alt={card.card_name} className="w-full h-full object-cover" />
+                            <img src={card.imageUrl || card.image_url} alt={card.cardName || card.card_name} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 p-2 flex flex-col justify-end transition-opacity">
-                                <span className="text-[10px] font-black text-white uppercase">{card.card_name}</span>
+                                <span className="text-[10px] font-black text-white uppercase">{card.cardName || card.card_name}</span>
                             </div>
                         </div>
                     ))}

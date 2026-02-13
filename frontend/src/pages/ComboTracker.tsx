@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_BASE_URL } from '../config'
 
 interface YGOCard {
     id: number;
@@ -35,7 +36,7 @@ function ComboTracker() {
     const handleSearch = async (query: string) => {
         setIsSearching(true)
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/search-cards/?q=${encodeURIComponent(query)}`)
+            const response = await fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(query)}`)
             const data = await response.json()
             setSearchResults(data)
         } catch (error) {

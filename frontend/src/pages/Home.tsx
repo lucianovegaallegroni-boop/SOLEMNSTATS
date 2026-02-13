@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from 'react-router-dom'
+import { API_BASE_URL } from '../config'
 
 function Home() {
     const navigate = useNavigate()
@@ -27,7 +28,7 @@ function Home() {
         }
 
         const timer = setTimeout(() => {
-            fetch(`http://127.0.0.1:8000/api/search-cards/?q=${lastLine}`)
+            fetch(`${API_BASE_URL}/api/search-cards?q=${lastLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 5)))
                 .catch(err => console.error('Search error:', err));
@@ -104,7 +105,7 @@ function Home() {
 
         setIsAnalyzing(true);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/save-deck/', {
+            const response = await fetch(`${API_BASE_URL}/api/save-deck/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -175,7 +176,7 @@ function Home() {
                                         {area} Deck
                                     </h3>
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${area === 'MAIN' ? 'bg-primary/10 text-primary' :
-                                            getSectionCount(deckLists[area]) > 15 ? 'bg-red-500/10 text-red-500' : 'bg-accent-blue/10 text-accent-blue'
+                                        getSectionCount(deckLists[area]) > 15 ? 'bg-red-500/10 text-red-500' : 'bg-accent-blue/10 text-accent-blue'
                                         }`}>
                                         {getSectionCount(deckLists[area])} cards
                                     </span>

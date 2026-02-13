@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { API_BASE_URL } from '../config'
 
 interface Deck {
     id: number;
     name: string;
-    created_at: string;
-    total_cards: number;
-    raw_list: string;
+    createdAt: string;
+    totalCards: number;
+    rawList: string;
 }
 
 function Decks() {
@@ -18,7 +19,7 @@ function Decks() {
     }, [])
 
     const fetchDecks = () => {
-        fetch('http://127.0.0.1:8000/api/list-decks/')
+        fetch(`${API_BASE_URL}/api/list-decks`)
             .then(response => response.json())
             .then(data => {
                 setDecks(data)
@@ -36,7 +37,7 @@ function Decks() {
         }
 
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/delete-deck/${id}/`, {
+            const response = await fetch(`${API_BASE_URL}/api/deck/${id}`, {
                 method: 'DELETE',
             });
 
@@ -91,13 +92,13 @@ function Decks() {
                                     <span className="material-icons text-primary">layers</span>
                                 </div>
                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
-                                    {new Date(deck.created_at).toLocaleDateString()}
+                                    {new Date(deck.createdAt).toLocaleDateString()}
                                 </span>
                             </div>
 
                             <h3 className="text-xl font-black text-white uppercase italic mb-1 truncate">{deck.name}</h3>
                             <p className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
-                                {deck.total_cards} Cards Total
+                                {deck.totalCards} Cards Total
                             </p>
 
                             <div className="flex items-center gap-2 pt-4 border-t border-slate-800">
