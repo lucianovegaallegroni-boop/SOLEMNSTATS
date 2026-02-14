@@ -41,9 +41,11 @@ function EditDeck() {
 
     useEffect(() => {
         const currentList = deckLists[activeTab];
-        const lastLine = currentList.split('\n').pop()?.trim().replace(/ x\d+$/i, '') || '';
+        const rawLastLine = currentList.split('\n').pop()?.trim() || '';
+        const hasQuantity = /[xX]\s*\d+$/.test(rawLastLine);
+        const lastLine = rawLastLine.replace(/\s*[xX]\s*\d+$/i, '');
 
-        if (lastLine.length < 2) {
+        if (hasQuantity || lastLine.length < 2) {
             setSuggestions([]);
             setActiveSuggestionIdx(0);
             return;

@@ -173,7 +173,7 @@ function Dashboard() {
                         {areaCards.reduce((acc: number, c: any) => acc + c.quantity, 0)} Cards
                     </span>
                 </div>
-                <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                <div className="grid grid-cols-8 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-0.5 sm:gap-1 md:gap-2">
                     {areaCards.map((card: any) => (
                         Array(card.quantity).fill(card).map((_, i) => {
                             const rawTags = card.customTags || card.custom_tags;
@@ -196,17 +196,17 @@ function Dashboard() {
                                         loading="lazy"
                                     />
                                     {/* Tag Indicators */}
-                                    <div className="absolute top-1 left-1 flex flex-wrap gap-0.5 pointer-events-none">
+                                    <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 flex flex-wrap gap-0.5 pointer-events-none">
                                         {tags.map((tag: string) => (
-                                            <div key={tag} className={`bg-black/90 text-white text-[5px] font-black px-1 rounded-sm uppercase ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
+                                            <div key={tag} className={`bg-black/90 text-white text-[3px] sm:text-[5px] font-black px-0.5 sm:px-1 rounded-sm uppercase ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
                                                 {tag}
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Hover Overlay */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1">
-                                        <span className="text-[7px] font-black text-white uppercase truncate">{card.cardName || card.card_name}</span>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-0.5 sm:p-1">
+                                        <span className="text-[5px] sm:text-[7px] font-black text-white uppercase truncate">{card.cardName || card.card_name}</span>
                                         {tagMode && (
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 px-2 py-1 rounded text-[8px] font-black uppercase text-white border border-white/20 whitespace-nowrap">
                                                 {tags.includes(tagMode) ? 'Remove' : 'Add'} {tagMode}
@@ -223,34 +223,34 @@ function Dashboard() {
     }
 
     return (
-        <main className="max-w-[1600px] mx-auto px-6 py-8">
-            <div className="mb-8 flex justify-between items-end border-b border-primary/20 pb-4">
+        <main className="max-w-[1600px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
+            <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end border-b border-primary/20 pb-4 gap-3">
                 <div>
-                    <h1 className="text-4xl font-black italic uppercase text-white leading-none">{deck.name}</h1>
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[11px] mt-2">
+                    <h1 className="text-2xl sm:text-4xl font-black italic uppercase text-white leading-none">{deck.name}</h1>
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px] sm:text-[11px] mt-1 sm:mt-2">
                         Real-Time Analysis • {deck.totalCards || deck.total_cards} Cards • Database Connected
                     </p>
                 </div>
-                <div className="text-right flex flex-col items-end gap-2">
-                    <span className="text-[10px] font-black text-primary uppercase block mb-1">Interactive Tagging Mode</span>
-                    <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                <div className="flex flex-col items-start sm:items-end gap-2">
+                    <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase block">Interactive Tagging Mode</span>
+                    <div className="flex overflow-x-auto bg-slate-900 p-1 rounded-lg border border-slate-800 max-w-full">
                         {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine'].map(cat => (
                             <button
                                 key={cat}
                                 onClick={() => setTagMode(tagMode === cat ? null : cat)}
-                                className={`px-3 py-1.5 rounded text-[10px] font-black uppercase transition-all flex items-center gap-2 ${tagMode === cat
+                                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-[8px] sm:text-[10px] font-black uppercase transition-all flex items-center gap-1 sm:gap-2 whitespace-nowrap ${tagMode === cat
                                     ? `bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]`
                                     : 'text-slate-500 hover:text-white hover:bg-white/5'
                                     }`}
                             >
-                                <div className={`w-2 h-2 rounded-full ${tagColors[cat]?.replace('border-', 'bg-') || 'bg-slate-500'}`}></div>
+                                <div className={`w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full ${tagColors[cat]?.replace('border-', 'bg-') || 'bg-slate-500'}`}></div>
                                 {cat}
                             </button>
                         ))}
                         {tagMode && (
                             <button
                                 onClick={() => setTagMode(null)}
-                                className="ml-2 px-2 py-1.5 text-[10px] font-black text-red-500 hover:text-red-400 uppercase border-l border-slate-700 pl-3"
+                                className="ml-1 sm:ml-2 px-2 py-1 sm:py-1.5 text-[8px] sm:text-[10px] font-black text-red-500 hover:text-red-400 uppercase border-l border-slate-700 pl-2 sm:pl-3 whitespace-nowrap"
                             >
                                 Exit Mode
                             </button>
@@ -311,11 +311,11 @@ function Dashboard() {
                 )}
             </section>
 
-            <div className="masonry-grid flex flex-wrap gap-6">
-                <div className="ygo-card-border rounded p-6 shadow-2xl flex flex-col flex-1 min-w-[300px]">
-                    <h3 className="font-black text-xs uppercase tracking-[0.2em] text-primary mb-6">Card Type Analysis</h3>
-                    <div className="flex items-center gap-8 flex-1">
-                        <div className="relative w-36 h-36 flex-shrink-0">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-4 sm:gap-6">
+                <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl flex flex-col flex-1 min-w-0 w-full sm:min-w-[300px]">
+                    <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary mb-4 sm:mb-6">Card Type Analysis</h3>
+                    <div className="flex items-center gap-4 sm:gap-8 flex-1">
+                        <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0">
                             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                                 <circle className="stroke-slate-800" cx="18" cy="18" fill="none" r="16" strokeWidth="3"></circle>
                                 {/* Monsters - Orange/Brown */}
@@ -336,8 +336,8 @@ function Dashboard() {
                                 ></circle>
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                <span className="text-2xl font-black italic">{deck.totalCards || deck.total_cards}</span>
-                                <span className="text-[9px] uppercase text-primary font-bold tracking-tighter">Cards</span>
+                                <span className="text-xl sm:text-2xl font-black italic">{deck.totalCards || deck.total_cards}</span>
+                                <span className="text-[8px] sm:text-[9px] uppercase text-primary font-bold tracking-tighter">Cards</span>
                             </div>
                         </div>
                         <div className="space-y-2.5 flex-1">
@@ -357,9 +357,9 @@ function Dashboard() {
                     </div>
                 </div>
 
-                <div className="ygo-card-border rounded p-6 shadow-2xl flex flex-col flex-1 min-w-[300px]">
+                <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl flex flex-col flex-1 min-w-0 w-full sm:min-w-[300px]">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-black text-xs uppercase tracking-[0.2em] text-primary">Duel Simulation (Main Deck)</h3>
+                        <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary">Duel Simulation (Main Deck)</h3>
                         <button
                             onClick={() => setTagMode(tagMode ? null : 'Starter')} // Default to Starter if turning on
                             className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${tagMode ? 'bg-primary text-background-dark border-primary' : 'text-slate-500 border-slate-700 hover:text-white hover:border-white'}`}
@@ -367,7 +367,7 @@ function Dashboard() {
                             {tagMode ? 'Done Editing' : 'Edit Tags'}
                         </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                         {[
                             { name: 'Starter', color: 'bg-green-500' },
                             { name: 'Extender', color: 'bg-blue-500' },
@@ -411,9 +411,9 @@ function Dashboard() {
                 </div>
             </div>
 
-            <div className="ygo-card-border rounded p-6 shadow-2xl mt-6">
-                <h3 className="font-black text-xs uppercase tracking-[0.2em] text-primary mb-6">Probability Explorer (Draw 5)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl mt-4 sm:mt-6">
+                <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary mb-4 sm:mb-6">Probability Explorer (Draw 5)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                     {[
                         { name: 'Starter', color: 'text-green-500' },
                         { name: 'Extender', color: 'text-blue-500' },
@@ -465,24 +465,24 @@ function Dashboard() {
                 </div>
             </div>
 
-            <section className="mt-8 bg-black/40 border border-primary/20 rounded p-8 relative">
-                <div className="flex justify-between items-center mb-10">
+            <section className="mt-6 sm:mt-8 bg-black/40 border border-primary/20 rounded p-4 sm:p-8 relative">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 sm:mb-10 gap-3">
                     <div>
-                        <h2 className="text-2xl font-black italic uppercase text-white">Sample Opening Hand</h2>
-                        <p className="text-[11px] text-slate-500 font-bold uppercase">Simulated draw from Main Deck only.</p>
+                        <h2 className="text-xl sm:text-2xl font-black italic uppercase text-white">Sample Opening Hand</h2>
+                        <p className="text-[9px] sm:text-[11px] text-slate-500 font-bold uppercase">Simulated draw from Main Deck only.</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2 sm:gap-3">
                         <button onClick={() => {
                             if (!deck || !deck.cards) return;
                             const mainCards = deck.cards.filter((c: any) => c.area === 'MAIN').flatMap((card: any) =>
                                 Array(Math.max(1, parseInt(card.quantity) || 1)).fill(card)
                             );
                             shuffleAndDraw(mainCards);
-                        }} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded text-[11px] font-black uppercase">Redraw</button>
-                        {!showSixth && deckStack.length > 0 && <button onClick={drawSixth} className="bg-primary text-background-dark px-6 py-3 rounded text-[11px] font-black uppercase">Draw 6th</button>}
+                        }} className="bg-slate-800 hover:bg-slate-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-[11px] font-black uppercase">Redraw</button>
+                        {!showSixth && deckStack.length > 0 && <button onClick={drawSixth} className="bg-primary text-background-dark px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-[11px] font-black uppercase">Draw 6th</button>}
                     </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
                     {hand.map((card, idx) => (
                         <div key={idx} className="aspect-[2.5/3.6] relative group overflow-hidden rounded border border-primary/20">
                             <img src={card.imageUrl || card.image_url} alt={card.cardName || card.card_name} className="w-full h-full object-cover" />
