@@ -12,16 +12,18 @@ function EditDeck() {
     const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(0)
     const [activeTab, setActiveTab] = useState<'MAIN' | 'EXTRA' | 'SIDE'>('MAIN')
     const [isLoading, setIsLoading] = useState(true)
+    const [cardMetadata, setCardMetadata] = useState<Record<string, string>>({})
 
     // Fetch and Autocomplete (same as before)
     useEffect(() => {
         fetch(`${API_BASE_URL}/api/deck/${id}`)
             .then(res => res.json())
             .then(data => {
-                setDeckName(data.name)
+                const metadata: Record<string, string> = {};
                 const lists = { MAIN: [], EXTRA: [], SIDE: [] } as any;
                 data.cards.forEach((card: any) => {
                     const line = `${card.cardName} x${card.quantity}`;
+                    metadata[card.cardName] = card.imageUrl || card.image_url;
                     if (card.area === 'EXTRA') lists.EXTRA.push(line);
                     else if (card.area === 'SIDE') lists.SIDE.push(line);
                     else lists.MAIN.push(line);
@@ -31,6 +33,7 @@ function EditDeck() {
                     EXTRA: lists.EXTRA.join('\n'),
                     SIDE: lists.SIDE.join('\n')
                 });
+                setCardMetadata(metadata);
                 setIsLoading(false)
             })
             .catch(err => {
@@ -61,6 +64,50 @@ function EditDeck() {
         return () => clearTimeout(timer);
     }, [deckLists, activeTab]);
 
+    // Metadata auto-fetcher for manual entries
+    useEffect(() => {
+        const allNames = Object.values(deckLists).flatMap(list =>
+            list.split('\n')
+                .filter(l => l.trim())
+                .map(l => l.replace(/\s*[xX]\s*\d+$/, '').trim())
+        );
+        const uniqueNames = Array.from(new Set(allNames));
+        const missing = uniqueNames.filter(name => !cardMetadata[name]);
+
+        if (missing.length === 0) return;
+
+        const timer = setTimeout(() => {
+            missing.forEach(name => {
+                fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
+                        if (match) {
+                            setCardMetadata(prev => ({ ...prev, [name]: match.image_url_small }));
+                        }
+                    })
+                    .catch(e => console.error('Meta fetch error:', e));
+            });
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [deckLists, cardMetadata]);
+
+    const selectSuggestion = (idx: number, area: 'MAIN' | 'EXTRA' | 'SIDE') => {
+        if (!suggestions[idx]) return;
+        const suggestion = suggestions[idx];
+        const lines = deckLists[area].split('\n');
+        const lastLine = lines[lines.length - 1];
+        const match = lastLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
+        const quantity = match ? ` x${match[2]}` : '';
+
+        lines[lines.length - 1] = suggestion.name + quantity;
+        setDeckLists(prev => ({ ...prev, [area]: lines.join('\n') }));
+        setCardMetadata(prev => ({ ...prev, [suggestion.name]: suggestion.image_url_small }));
+        setSuggestions([]);
+        setActiveSuggestionIdx(0);
+    }
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (suggestions.length > 0) {
             if (e.key === 'ArrowDown') {
@@ -71,19 +118,7 @@ function EditDeck() {
                 setActiveSuggestionIdx(prev => (prev - 1 + suggestions.length) % suggestions.length);
             } else if (e.key === 'Shift') {
                 e.preventDefault();
-                const lines = deckLists[activeTab].split('\n');
-                const lastLine = lines[lines.length - 1];
-                const match = lastLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
-                const quantity = match ? ` x${match[2]}` : '';
-
-                lines[lines.length - 1] = suggestions[activeSuggestionIdx].name + quantity;
-
-                setDeckLists(prev => ({
-                    ...prev,
-                    [activeTab]: lines.join('\n')
-                }));
-                setSuggestions([]);
-                setActiveSuggestionIdx(0);
+                selectSuggestion(activeSuggestionIdx, activeTab);
             }
         }
     };
@@ -198,8 +233,13 @@ function EditDeck() {
                                 <h3 className={`text-sm font-black uppercase tracking-[0.2em] ${area === 'MAIN' ? 'text-primary' : area === 'EXTRA' ? 'text-accent-blue' : 'text-accent-purple'}`}>
                                     {area} Deck
                                 </h3>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${area === 'MAIN' ? 'bg-primary/10 text-primary' :
-                                    getSectionCount(deckLists[area]) > 15 ? 'bg-red-500/10 text-red-500' : 'bg-slate-700 text-slate-300'
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${area === 'MAIN'
+                                    ? (getSectionCount(deckLists[area]) < 40 || getSectionCount(deckLists[area]) > 60
+                                        ? 'bg-red-500/10 text-red-500'
+                                        : 'bg-primary/10 text-primary')
+                                    : getSectionCount(deckLists[area]) > 15
+                                        ? 'bg-red-500/10 text-red-500'
+                                        : 'bg-slate-700 text-slate-300'
                                     }`}>
                                     {getSectionCount(deckLists[area])} cards
                                 </span>
@@ -224,7 +264,8 @@ function EditDeck() {
                                                 {suggestions.map((card, idx) => (
                                                     <div
                                                         key={card.id}
-                                                        className={`flex items-center gap-2 p-1.5 rounded transition-colors ${idx === activeSuggestionIdx ? (area === 'MAIN' ? 'bg-primary/20 border border-primary/30' : area === 'EXTRA' ? 'bg-accent-blue/20 border border-accent-blue/30' : 'bg-accent-purple/20 border border-accent-purple/30') : 'hover:bg-white/5'}`}
+                                                        onClick={() => selectSuggestion(idx, area)}
+                                                        className={`flex items-center gap-2 p-1.5 rounded transition-colors cursor-pointer ${idx === activeSuggestionIdx ? (area === 'MAIN' ? 'bg-primary/20 border border-primary/30' : area === 'EXTRA' ? 'bg-accent-blue/20 border border-accent-blue/30' : 'bg-accent-purple/20 border border-accent-purple/30') : 'hover:bg-white/5'}`}
                                                     >
                                                         <img src={card.image_url_small} alt="" className="w-6 h-9 object-cover rounded-sm" />
                                                         <p className="text-[10px] font-bold text-white truncate">{card.name}</p>
@@ -240,31 +281,40 @@ function EditDeck() {
                                     <div className="px-4 py-3 border-b border-slate-200 dark:border-border-dark flex justify-between items-center bg-white/5">
                                         <span className={`text-xs font-black uppercase tracking-widest ${area === 'MAIN' ? 'text-primary' : area === 'EXTRA' ? 'text-accent-blue' : 'text-accent-purple'}`}>Live Preview</span>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                    <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-black/40">
                                         {deckLists[area].trim() ? (
-                                            <div className="space-y-2">
-                                                {deckLists[area].split('\n').map((line, i) => {
-                                                    if (!line.trim()) return null;
+                                            <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1">
+                                                {deckLists[area].split('\n').flatMap((line, i) => {
+                                                    if (!line.trim()) return [];
                                                     const match = line.match(/(.*?)\s*[xX]\s*(\d+)$/) || [null, line, '1'];
                                                     const name = match[1]?.trim() || line.trim();
                                                     const qty = parseInt(match[2] as string) || 1;
-                                                    return (
-                                                        <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-card-dark/40 border border-slate-200 dark:border-primary/10 rounded-lg group hover:border-primary/30 transition-all">
-                                                            <div className="flex items-center gap-3 overflow-hidden">
-                                                                <button onClick={() => removeCard(area, i)} className="text-slate-600 hover:text-red-500"><span className="material-icons text-lg">delete_outline</span></button>
-                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate uppercase italic">{name}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-1 bg-background-dark/50 rounded-md p-1 border border-white/5">
-                                                                <button onClick={() => updateQuantity(area, i, qty - 1)} className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white"><span className="material-icons text-xs">remove</span></button>
-                                                                <span className="text-[12px] font-black text-primary italic px-2">{qty}</span>
-                                                                <button onClick={() => updateQuantity(area, i, qty + 1)} className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-white"><span className="material-icons text-xs">add</span></button>
+                                                    const imageUrl = cardMetadata[name];
+                                                    const isOverLimit = qty > 3;
+
+                                                    return Array.from({ length: qty }, (_, copyIdx) => (
+                                                        <div key={`${i}-${copyIdx}`} className={`relative aspect-[2.5/3.6] group rounded overflow-hidden border transition-all ${isOverLimit ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-white/10 hover:border-primary/50'}`}>
+                                                            {imageUrl ? (
+                                                                <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-slate-800 flex items-center justify-center p-1">
+                                                                    <span className="text-[5px] font-black uppercase text-center text-slate-500">{name}</span>
+                                                                </div>
+                                                            )}
+                                                            {/* Hover overlay with actions */}
+                                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <div className="flex gap-0.5">
+                                                                    <button onClick={() => updateQuantity(area, i, qty + 1)} className="w-4 h-4 bg-primary/20 hover:bg-primary/40 rounded flex items-center justify-center text-primary"><span className="material-icons text-[10px] font-black">add</span></button>
+                                                                    <button onClick={() => updateQuantity(area, i, qty - 1)} className="w-4 h-4 bg-red-500/20 hover:bg-red-500/40 rounded flex items-center justify-center text-red-500"><span className="material-icons text-[10px] font-black">remove</span></button>
+                                                                </div>
+                                                                <button onClick={() => removeCard(area, i)} className="w-4 h-4 bg-white/10 hover:bg-white/20 rounded flex items-center justify-center text-white"><span className="material-icons text-[10px] font-black">delete</span></button>
                                                             </div>
                                                         </div>
-                                                    );
+                                                    ));
                                                 })}
                                             </div>
                                         ) : (
-                                            <div className="h-full flex items-center justify-center text-slate-500 italic text-sm">No cards</div>
+                                            <div className="h-full flex items-center justify-center text-slate-500 italic text-sm font-black uppercase tracking-widest">No cards in {area}</div>
                                         )}
                                     </div>
                                 </div>
