@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from '../_lib/prisma';
+import { prisma } from '../_lib/db';
 import { parseDeckList } from '../_lib/parser';
 import { getCardsMetadata, findBestMatch } from '../_lib/card-service';
 
