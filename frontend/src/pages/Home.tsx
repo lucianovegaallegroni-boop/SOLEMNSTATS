@@ -16,26 +16,62 @@ function Home() {
     const [suggestions, setSuggestions] = useState<any[]>([])
     const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(0)
 
-    // Debounce search for autocomplete based on current active tab list
+    const [cursorPosition, setCursorPosition] = useState(0)
+    const [suppressedLine, setSuppressedLine] = useState<string | null>(null)
+
+    // Debounce search for autocomplete based on cursor position
     useEffect(() => {
         const currentList = deckLists[activeTab];
-        const lastLine = currentList.split('\n').pop()?.trim().replace(/ x\d+$/i, '') || '';
 
-        if (lastLine.length < 2) {
+        // Find line at cursor
+        let start = cursorPosition;
+        let end = cursorPosition;
+
+        // Safety check for bounds
+        if (start > currentList.length) start = currentList.length;
+        if (end > currentList.length) end = currentList.length;
+
+        while (start > 0 && currentList[start - 1] !== '\n') {
+            start--;
+        }
+        while (end < currentList.length && currentList[end] !== '\n') {
+            end++;
+        }
+
+        const currentLine = currentList.substring(start, end).trim();
+        const cleanLine = currentLine.replace(/ x\d+$/i, '');
+
+        // If this line matches the suppressed line exactly, don't search
+        if (currentLine === suppressedLine) {
+            setSuggestions([]);
+            return;
+        }
+
+        // If we moved to a new line or changed content, clear suppression
+        if (currentLine !== suppressedLine) {
+            setSuppressedLine(null);
+        }
+
+        if (cleanLine.length < 2) {
             setSuggestions([]);
             setActiveSuggestionIdx(0);
             return;
         }
 
         const timer = setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/search-cards?q=${lastLine}`)
+            fetch(`${API_BASE_URL}/api/search-cards?q=${cleanLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 5)))
                 .catch(err => console.error('Search error:', err));
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [deckLists, activeTab]);
+    }, [deckLists, activeTab, cursorPosition, suppressedLine]);
+
+    const handleCursorActivity = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const target = e.target as HTMLTextAreaElement;
+        setCursorPosition(target.selectionStart);
+    }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (suggestions.length > 0) {
@@ -48,20 +84,48 @@ function Home() {
             } else if (e.key === 'Shift') {
                 e.preventDefault();
                 const currentList = deckLists[activeTab];
-                const lines = currentList.split('\n');
-                const lastLine = lines[lines.length - 1];
 
-                const match = lastLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
+                // Find start and end of current line
+                let start = cursorPosition;
+                // Adjust if cursor is at end of line (selectionStart is usually after the char)
+                // But we want the line containing the cursor.
+                // If cursor is at 0, start is 0. 
+
+                while (start > 0 && currentList[start - 1] !== '\n') {
+                    start--;
+                }
+
+                let end = cursorPosition;
+                while (end < currentList.length && currentList[end] !== '\n') {
+                    end++;
+                }
+
+                const currentLine = currentList.substring(start, end);
+                const match = currentLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
                 const quantity = match ? ` x${match[2]}` : '';
 
-                lines[lines.length - 1] = suggestions[activeSuggestionIdx].name + quantity;
+                const selectedCardName = suggestions[activeSuggestionIdx].name;
+                const newLine = selectedCardName + quantity;
+
+                // Replace the line
+                const newList = currentList.substring(0, start) + newLine + currentList.substring(end);
 
                 setDeckLists(prev => ({
                     ...prev,
-                    [activeTab]: lines.join('\n')
+                    [activeTab]: newList
                 }));
+
+                // Suppress suggestions for this specific line content until changed
+                setSuppressedLine(newLine);
                 setSuggestions([]);
                 setActiveSuggestionIdx(0);
+
+                // Move cursor to end of inserted card name
+                // This will trigger handleCursorActivity via implicit render update? 
+                // No, we should update cursor position manually if we want it to be sync, 
+                // but React state updates might be batched.
+                // Actually the textarea value update will happen, we might need to sync cursor.
+                // For now, let's just update the list. The user logic will clear suppression if they type.
             }
         }
     };
@@ -192,9 +256,12 @@ function Home() {
                                             onFocus={() => setActiveTab(area)}
                                             onChange={(e) => setDeckLists(prev => ({ ...prev, [area]: e.target.value }))}
                                             onKeyDown={handleKeyDown}
+                                            onKeyUp={handleCursorActivity}
+                                            onClick={handleCursorActivity}
+                                            onSelect={handleCursorActivity}
                                         ></textarea>
 
-                                        {activeTab === area && suggestions.length > 0 && (
+                                        {activeTab === area && suggestions.length > 0 && !suppressedLine && (
                                             <div className={`absolute bottom-4 right-4 z-50 bg-card-dark border rounded-lg shadow-2xl p-2 min-w-[200px] animate-in fade-in slide-in-from-bottom-2 ${area === 'MAIN' ? 'border-primary/30' : area === 'EXTRA' ? 'border-accent-blue/30' : 'border-accent-purple/30'}`}>
                                                 <p className={`text-[10px] font-black uppercase mb-2 tracking-widest border-b pb-1 ${area === 'MAIN' ? 'text-primary border-primary/10' : area === 'EXTRA' ? 'text-accent-blue border-accent-blue/10' : 'text-accent-purple border-accent-purple/10'}`}>Suggestions (Shift)</p>
                                                 <div className="space-y-1">

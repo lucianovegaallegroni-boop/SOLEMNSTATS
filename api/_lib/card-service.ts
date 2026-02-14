@@ -31,7 +31,7 @@ export async function searchCards(query: string): Promise<YGOCard[]> {
 
     try {
         const response = await axios.get(BASE_URL, {
-            params: { fname: query, num: 20, offset: 0 },
+            params: { fname: query, num: 30, offset: 0 },
         });
 
         return (response.data.data || []).map((card: any) => ({

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from '../_lib/db';
+import { supabase } from '../_lib/supabase';
 import { parseDeckList } from '../_lib/parser';
 import { getCardsMetadata, findBestMatch } from '../_lib/card-service';
 
@@ -10,31 +10,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Invalid deck ID' });
     }
 
+    // Helper to map deck to valid response format
+    const mapDeck = (deck: any) => ({
+        ...deck,
+        createdAt: deck.created_at,
+        totalCards: deck.total_cards,
+        rawList: deck.raw_list,
+        cards: deck.cards ? deck.cards.map((c: any) => ({
+            ...c,
+            deckId: c.deck_id,
+            cardName: c.card_name,
+            cardType: c.card_type,
+            imageUrl: c.image_url,
+            customTags: c.custom_tags,
+        })) : []
+    });
+
     // GET — retrieve a single deck
     if (req.method === 'GET') {
-        const deck = await prisma.deck.findUnique({
-            where: { id },
-            include: { cards: true },
-        });
+        const { data: deck, error } = await supabase
+            .from('decks')
+            .select('*, cards:deck_cards(*)')
+            .eq('id', id)
+            .order('id', { foreignTable: 'cards', ascending: true })
+            .single();
 
-        if (!deck) {
+        if (error || !deck) {
             return res.status(404).json({ error: 'Deck not found' });
         }
 
-        return res.status(200).json(deck);
+        return res.status(200).json(mapDeck(deck));
     }
 
     // PUT — update a deck
     if (req.method === 'PUT') {
-        const existingDeck = await prisma.deck.findUnique({ where: { id } });
-        if (!existingDeck) {
+        // Check if deck exists
+        const { data: existingDeck, error: fetchError } = await supabase
+            .from('decks')
+            .select('id, name')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !existingDeck) {
             return res.status(404).json({ error: 'Deck not found' });
         }
 
         const { main_list = '', extra_list = '', side_list = '', name } = req.body;
 
-        if (!main_list && !extra_list && !side_list) {
-            return res.status(400).json({ error: 'No deck list provided' });
+        if (!main_list && !extra_list && !side_list && !name) {
+            // If nothing to update, just return current deck
+            // But usually PUT requires full resource or at least some body.
+            // If body is empty, we might error or just return.
+            // Assuming parsed lists are required if provided.
         }
 
         const allCards = [
@@ -45,73 +72,92 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const totalCount = allCards.reduce((acc, c) => acc + c.quantity, 0);
 
-        const cardNames = allCards.map((c) => c.name);
-        const metadata = await getCardsMetadata(cardNames);
+        // Fetch metadata if lists changed
+        let metadata: any = {};
+        if (allCards.length > 0) {
+            const cardNames = allCards.map((c) => c.name);
+            metadata = await getCardsMetadata(cardNames);
+        }
 
         // Update deck info
-        await prisma.deck.update({
-            where: { id },
-            data: {
+        const { error: updateError } = await supabase
+            .from('decks')
+            .update({
                 name: name || existingDeck.name,
-                rawList: main_list,
-                totalCards: totalCount,
-            },
-        });
+                raw_list: main_list || undefined,
+                total_cards: totalCount > 0 ? totalCount : undefined, // Only update if re-parsed
+            })
+            .eq('id', id);
 
-        // Delete old cards and create new ones
-        await prisma.deckCard.deleteMany({ where: { deckId: id } });
+        if (updateError) {
+            return res.status(500).json({ error: 'Failed to update deck info' });
+        }
 
-        for (const cardData of allCards) {
-            let meta = metadata[cardData.name.toLowerCase()];
-            let cardName = cardData.name;
+        // If lists were provided, rebuild cards
+        if (allCards.length > 0) {
+            // Delete old cards
+            await supabase.from('deck_cards').delete().eq('deck_id', id);
 
-            if (!meta) {
-                const fuzzy = await findBestMatch(cardData.name);
-                if (fuzzy) {
-                    meta = {
-                        type: fuzzy.type,
-                        image_url: fuzzy.image_url,
-                        attribute: fuzzy.attribute,
-                        level: fuzzy.level,
-                        atk: fuzzy.atk,
-                        def: fuzzy.def,
-                    };
-                    cardName = fuzzy.name;
+            const cardsToInsert = [];
+            for (const cardData of allCards) {
+                let meta = metadata[cardData.name.toLowerCase()];
+                let cardName = cardData.name;
+
+                if (!meta) {
+                    const fuzzy = await findBestMatch(cardData.name);
+                    if (fuzzy) {
+                        meta = {
+                            type: fuzzy.type,
+                            image_url: fuzzy.image_url,
+                            attribute: fuzzy.attribute,
+                            level: fuzzy.level,
+                            atk: fuzzy.atk,
+                            def: fuzzy.def,
+                        };
+                        cardName = fuzzy.name;
+                    }
                 }
-            }
 
-            await prisma.deckCard.create({
-                data: {
-                    deckId: id,
-                    cardName,
+                cardsToInsert.push({
+                    deck_id: id,
+                    card_name: cardName,
                     area: cardData.area,
                     quantity: cardData.quantity,
-                    cardType: meta?.type || 'Unknown',
-                    imageUrl: meta?.image_url || '',
+                    card_type: meta?.type || 'Unknown',
+                    image_url: meta?.image_url || '',
                     attribute: meta?.attribute || '',
                     level: meta?.level ?? null,
                     atk: meta?.atk ?? null,
                     defense: meta?.def ?? null,
-                },
-            });
+                });
+            }
+
+            if (cardsToInsert.length > 0) {
+                await supabase.from('deck_cards').insert(cardsToInsert);
+            }
         }
 
-        const updatedDeck = await prisma.deck.findUnique({
-            where: { id },
-            include: { cards: true },
-        });
+        // Fetch updated deck
+        const { data: updatedDeck, error: finalFetchError } = await supabase
+            .from('decks')
+            .select('*, cards:deck_cards(*)')
+            .eq('id', id)
+            .order('id', { foreignTable: 'cards', ascending: true })
+            .single();
 
-        return res.status(200).json(updatedDeck);
+        if (finalFetchError) {
+            return res.status(500).json({ error: 'Failed to fetch updated deck' });
+        }
+
+        return res.status(200).json(mapDeck(updatedDeck));
     }
 
     // DELETE
     if (req.method === 'DELETE') {
-        const deck = await prisma.deck.findUnique({ where: { id } });
-        if (!deck) {
-            return res.status(404).json({ error: 'Deck not found' });
+        const { error } = await supabase.from('decks').delete().eq('id', id);
+        if (error) {
+            return res.status(500).json({ error: 'Failed to delete deck' });
         }
-
-        await prisma.deck.delete({ where: { id } });
         return res.status(204).end();
     }
 

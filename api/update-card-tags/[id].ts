@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from '../_lib/db';
+import { supabase } from '../_lib/supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
@@ -12,8 +12,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Invalid card ID' });
     }
 
-    const card = await prisma.deckCard.findUnique({ where: { id } });
-    if (!card) {
+    const { data: card, error: fetchError } = await supabase
+        .from('deck_cards')
+        .select('id')
+        .eq('id', id)
+        .single();
+
+    if (fetchError || !card) {
         return res.status(404).json({ error: 'Card not found' });
     }
 
@@ -23,10 +28,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Invalid tags format' });
     }
 
-    await prisma.deckCard.update({
-        where: { id },
-        data: { customTags: JSON.stringify(tags) },
-    });
+    const { error: updateError } = await supabase
+        .from('deck_cards')
+        .update({ custom_tags: JSON.stringify(tags) })
+        .eq('id', id);
+
+    if (updateError) {
+        return res.status(500).json({ error: 'Failed to update tags' });
+    }
 
     res.status(200).json({ status: 'Tags updated', tags });
 }

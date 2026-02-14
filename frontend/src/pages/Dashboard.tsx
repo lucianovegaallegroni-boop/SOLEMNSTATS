@@ -24,6 +24,23 @@ function Dashboard() {
         }
     };
 
+    // Hypergeometric Math Helpers
+    const combinations = (n: number, k: number): number => {
+        if (k < 0 || k > n) return 0;
+        if (k === 0 || k === n) return 1;
+        if (k > n / 2) k = n - k;
+        let res = 1;
+        for (let i = 1; i <= k; i++) {
+            res = res * (n - i + 1) / i;
+        }
+        return res;
+    };
+
+    const getHypergeometric = (N: number, K: number, n: number, k: number): number => {
+        if (n > N || k > K || k > n || (n - k) > (N - K)) return 0;
+        return (combinations(K, k) * combinations(N - K, n - k)) / combinations(N, n);
+    };
+
     useEffect(() => {
         if (!id) return;
         fetchDeck();
@@ -120,8 +137,8 @@ function Dashboard() {
 
     const total = deck.total_cards || 1;
     const monsterPct = (stats.monsters / total) * 100;
-    // const spellPct = (stats.spells / total) * 100;
-    // const trapPct = (stats.traps / total) * 100;
+    const spellPct = (stats.spells / total) * 100;
+    const trapPct = (stats.traps / total) * 100;
 
     // Colors for tags
     const tagColors: Record<string, string> = {
@@ -301,7 +318,22 @@ function Dashboard() {
                         <div className="relative w-36 h-36 flex-shrink-0">
                             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                                 <circle className="stroke-slate-800" cx="18" cy="18" fill="none" r="16" strokeWidth="3"></circle>
-                                <circle cx="18" cy="18" fill="none" r="16" stroke="#fb923c" strokeDasharray={`${monsterPct} 100`} strokeWidth="3"></circle>
+                                {/* Monsters - Orange/Brown */}
+                                <circle cx="18" cy="18" fill="none" r="16" stroke="#D48545" strokeDasharray={`${monsterPct} 100`} strokeWidth="3"></circle>
+                                {/* Spells - Green */}
+                                <circle
+                                    cx="18" cy="18" fill="none" r="16" stroke="#1D9B7F"
+                                    strokeDasharray={`${spellPct} 100`}
+                                    strokeDashoffset={-monsterPct}
+                                    strokeWidth="3"
+                                ></circle>
+                                {/* Traps - Pink */}
+                                <circle
+                                    cx="18" cy="18" fill="none" r="16" stroke="#BC5A84"
+                                    strokeDasharray={`${trapPct} 100`}
+                                    strokeDashoffset={-(monsterPct + spellPct)}
+                                    strokeWidth="3"
+                                ></circle>
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center flex-col">
                                 <span className="text-2xl font-black italic">{deck.totalCards || deck.total_cards}</span>
@@ -309,9 +341,18 @@ function Dashboard() {
                             </div>
                         </div>
                         <div className="space-y-2.5 flex-1">
-                            <div className="flex justify-between text-[11px] font-bold uppercase"><span className="text-slate-400">Monsters</span><span>{stats.monsters}</span></div>
-                            <div className="flex justify-between text-[11px] font-bold uppercase"><span className="text-slate-400">Spells</span><span>{stats.spells}</span></div>
-                            <div className="flex justify-between text-[11px] font-bold uppercase"><span className="text-slate-400">Traps</span><span>{stats.traps}</span></div>
+                            <div className="flex justify-between text-[11px] font-bold uppercase">
+                                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#D48545]"></div> Monsters</span>
+                                <span>{stats.monsters}</span>
+                            </div>
+                            <div className="flex justify-between text-[11px] font-bold uppercase">
+                                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#1D9B7F]"></div> Spells</span>
+                                <span>{stats.spells}</span>
+                            </div>
+                            <div className="flex justify-between text-[11px] font-bold uppercase">
+                                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#BC5A84]"></div> Traps</span>
+                                <span>{stats.traps}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -341,13 +382,7 @@ function Dashboard() {
                             });
                             const countInDeck = taggedCards.reduce((acc: number, c: any) => acc + (c.quantity || 1), 0);
                             const N = (deck.cards || []).filter((c: any) => c.area === 'MAIN').reduce((acc: number, c: any) => acc + (c.quantity || 1), 0) || 1;
-                            const k = countInDeck;
-                            let prob = 0;
-                            if (N >= 5 && k > 0) {
-                                let chanceNoDraw = 1;
-                                for (let i = 0; i < 5; i++) chanceNoDraw *= (N - k - i) / (N - i);
-                                prob = (1 - chanceNoDraw) * 100;
-                            }
+                            const prob = (countInDeck / N) * 100;
 
                             const isSelected = tagMode === cat;
                             const isEditing = !!tagMode;
@@ -373,6 +408,60 @@ function Dashboard() {
                             );
                         })}
                     </div>
+                </div>
+            </div>
+
+            <div className="ygo-card-border rounded p-6 shadow-2xl mt-6">
+                <h3 className="font-black text-xs uppercase tracking-[0.2em] text-primary mb-6">Probability Explorer (Draw 5)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[
+                        { name: 'Starter', color: 'text-green-500' },
+                        { name: 'Extender', color: 'text-blue-500' },
+                        { name: 'Handtrap', color: 'text-red-500' },
+                        { name: 'Board Breaker', color: 'text-yellow-500' },
+                        { name: 'Engine', color: 'text-purple-500' },
+                        { name: 'Non-Engine', color: 'text-gray-500' }
+                    ].map(config => {
+                        const cat = config.name;
+                        const taggedCards = (deck.cards || []).filter((c: any) => safeMsgParse(c.customTags || c.custom_tags).includes(cat));
+                        const countInDeck = taggedCards.reduce((acc: number, c: any) => acc + (c.quantity || 1), 0);
+                        const N = (deck.cards || []).filter((c: any) => c.area === 'MAIN').reduce((acc: number, c: any) => acc + (c.quantity || 1), 0) || 1;
+
+                        if (countInDeck === 0) return null;
+
+                        // Hand size is 5, but capped at N
+                        const n = Math.min(5, N);
+
+                        const p0 = getHypergeometric(N, countInDeck, n, 0) * 100;
+                        const p1 = getHypergeometric(N, countInDeck, n, 1) * 100;
+                        const p2 = getHypergeometric(N, countInDeck, n, 2) * 100;
+                        const p3Plus = Math.max(0, 100 - (p0 + p1 + p2));
+
+                        return (
+                            <div key={cat} className="space-y-4 bg-slate-900/40 p-4 rounded-lg border border-white/5">
+                                <div className="flex justify-between items-center">
+                                    <span className={`text-[11px] font-black uppercase ${config.color}`}>{cat}</span>
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase">{countInDeck} in Deck</span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { label: '0x', val: p0, color: 'bg-slate-700' },
+                                        { label: '1x', val: p1, color: 'bg-primary' },
+                                        { label: '2x', val: p2, color: 'bg-primary/70' },
+                                        { label: '3x+', val: p3Plus, color: 'bg-primary/40' }
+                                    ].map(row => (
+                                        <div key={row.label} className="flex flex-col items-center">
+                                            <div className="w-full bg-slate-800 h-10 rounded-sm relative overflow-hidden mb-1">
+                                                <div className={`absolute bottom-0 w-full ${row.color}`} style={{ height: `${row.val}%` }}></div>
+                                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white mix-blend-difference">{row.val.toFixed(0)}%</span>
+                                            </div>
+                                            <span className="text-[8px] text-slate-500 font-black uppercase">{row.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from './_lib/db';
+import { supabase } from './_lib/supabase';
 import { parseDeckList } from './_lib/parser';
 import { getCardsMetadata, findBestMatch } from './_lib/card-service';
 
@@ -27,15 +27,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const metadata = await getCardsMetadata(cardNames);
 
     // Create deck
-    const deck = await prisma.deck.create({
-        data: {
+    const { data: deck, error: deckError } = await supabase
+        .from('decks')
+        .insert({
             name,
-            rawList: main_list,
-            totalCards: totalCount,
-        },
-    });
+            raw_list: main_list,
+            total_cards: totalCount,
+        })
+        .select()
+        .single();
 
-    // Create cards with metadata
+    if (deckError || !deck) {
+        return res.status(500).json({ error: deckError?.message || 'Failed to create deck' });
+    }
+
+    // Prepare cards with metadata
+    const cardsToInsert = [];
     for (const cardData of allCards) {
         let meta = metadata[cardData.name.toLowerCase()];
         let cardName = cardData.name;
@@ -55,27 +62,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        await prisma.deckCard.create({
-            data: {
-                deckId: deck.id,
-                cardName,
-                area: cardData.area,
-                quantity: cardData.quantity,
-                cardType: meta?.type || 'Unknown',
-                imageUrl: meta?.image_url || '',
-                attribute: meta?.attribute || '',
-                level: meta?.level ?? null,
-                atk: meta?.atk ?? null,
-                defense: meta?.def ?? null,
-            },
+        cardsToInsert.push({
+            deck_id: deck.id,
+            card_name: cardName,
+            area: cardData.area,
+            quantity: cardData.quantity,
+            card_type: meta?.type || 'Unknown',
+            image_url: meta?.image_url || '',
+            attribute: meta?.attribute || '',
+            level: meta?.level ?? null,
+            atk: meta?.atk ?? null,
+            defense: meta?.def ?? null,
         });
     }
 
+    // Batch insert cards
+    if (cardsToInsert.length > 0) {
+        const { error: cardsError } = await supabase.from('deck_cards').insert(cardsToInsert);
+        if (cardsError) {
+            return res.status(500).json({ error: 'Failed to save deck cards: ' + cardsError.message });
+        }
+    }
+
     // Return the full deck with cards
-    const fullDeck = await prisma.deck.findUnique({
-        where: { id: deck.id },
-        include: { cards: true },
-    });
+    const { data: fullDeck, error: fetchError } = await supabase
+        .from('decks')
+        .select('*, deck_cards(*)')
+        .eq('id', deck.id)
+        .order('id', { foreignTable: 'deck_cards', ascending: true })
+        .single();
+
+    if (fetchError) {
+        return res.status(500).json({ error: 'Failed to fetch created deck' });
+    }
 
     res.status(201).json(fullDeck);
 }
