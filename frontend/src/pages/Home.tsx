@@ -16,6 +16,8 @@ function Home() {
     const [suggestions, setSuggestions] = useState<any[]>([])
     const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(0)
     const [cardMetadata, setCardMetadata] = useState<Record<string, string>>({})
+    const [selectedCard, setSelectedCard] = useState<any>(null)
+    const [cardDetailsCache, setCardDetailsCache] = useState<Record<string, any>>({})
 
     const [cursorPosition, setCursorPosition] = useState(0)
     const [suppressedLine, setSuppressedLine] = useState<string | null>(null)
@@ -97,6 +99,23 @@ function Home() {
 
         return () => clearTimeout(timer);
     }, [deckLists, cardMetadata]);
+
+    const openCardDetail = (name: string) => {
+        if (cardDetailsCache[name]) {
+            setSelectedCard(cardDetailsCache[name]);
+            return;
+        }
+        fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+            .then(res => res.json())
+            .then(data => {
+                const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
+                if (match) {
+                    setCardDetailsCache(prev => ({ ...prev, [name]: match }));
+                    setSelectedCard(match);
+                }
+            })
+            .catch(e => console.error('Detail fetch error:', e));
+    };
 
     const selectSuggestion = (idx: number, area: 'MAIN' | 'EXTRA' | 'SIDE') => {
         if (!suggestions[idx]) return;
@@ -315,7 +334,7 @@ function Home() {
                                                         const isOverLimit = qty > 3;
 
                                                         return Array.from({ length: qty }, (_, copyIdx) => (
-                                                            <div key={`${i}-${copyIdx}`} className={`relative aspect-[2.5/3.6] group rounded overflow-hidden border transition-all ${isOverLimit ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-white/10 hover:border-primary/50'}`}>
+                                                            <div key={`${i}-${copyIdx}`} className={`relative aspect-[2.5/3.6] group rounded overflow-hidden border transition-all cursor-pointer ${isOverLimit ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-white/10 hover:border-primary/50'}`} onClick={() => openCardDetail(name)}>
                                                                 {imageUrl ? (
                                                                     <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
                                                                 ) : (
@@ -384,6 +403,43 @@ function Home() {
             <div className="mt-16 text-center border-t border-slate-200 dark:border-border-dark pt-8 pb-12">
                 <p className="text-slate-500 text-sm mb-4">Analyze your total consistency across all deck sections.</p>
             </div>
+
+            {/* Card Detail Modal */}
+            {selectedCard && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-6" onClick={() => setSelectedCard(null)}>
+                    <div className="bg-card-dark border border-border-dark rounded-3xl shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col md:flex-row">
+                            <div className="w-full md:w-[300px] flex-shrink-0 bg-black/20">
+                                <img src={selectedCard.image_url} alt={selectedCard.name} className="w-full h-auto md:h-full object-contain" />
+                            </div>
+                            <div className="flex-1 p-6 sm:p-8 flex flex-col gap-4 overflow-y-auto max-h-[80vh] custom-scrollbar">
+                                <div className="flex justify-between items-start gap-4">
+                                    <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider leading-tight">{selectedCard.name}</h2>
+                                    <button onClick={() => setSelectedCard(null)} className="text-slate-500 hover:text-white transition-colors">
+                                        <span className="material-icons">close</span>
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-black uppercase rounded-full">{selectedCard.type}</span>
+                                    {selectedCard.race && <span className="px-2 py-0.5 bg-accent-blue/10 text-accent-blue text-[10px] font-black uppercase rounded-full">{selectedCard.race}</span>}
+                                    {selectedCard.attribute && <span className="px-2 py-0.5 bg-accent-purple/10 text-accent-purple text-[10px] font-black uppercase rounded-full">{selectedCard.attribute}</span>}
+                                </div>
+                                {!(selectedCard.type?.toLowerCase().includes('spell') || selectedCard.type?.toLowerCase().includes('trap')) && (selectedCard.atk !== undefined || selectedCard.def !== undefined) && (
+                                    <div className="flex gap-4 text-xs font-black">
+                                        {selectedCard.level !== undefined && <span className="text-yellow-400">★ {selectedCard.level}</span>}
+                                        {selectedCard.atk !== undefined && <span className="text-red-400">ATK {selectedCard.atk}</span>}
+                                        {selectedCard.def !== undefined && <span className="text-blue-400">DEF {selectedCard.def}</span>}
+                                    </div>
+                                )}
+                                <div className="border-t border-border-dark pt-3">
+                                    <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedCard.desc}</p>
+                                </div>
+                                <button onClick={() => setSelectedCard(null)} className="mt-auto self-end px-4 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-black uppercase rounded-lg transition-colors">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     )
 }

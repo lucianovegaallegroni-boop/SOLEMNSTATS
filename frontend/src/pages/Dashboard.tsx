@@ -11,8 +11,9 @@ function Dashboard() {
     const [showSixth, setShowSixth] = useState(false)
     const [selectedCard, setSelectedCard] = useState<any>(null)
     const [isTagModalOpen, setIsTagModalOpen] = useState(false)
-    const [availableCategories] = useState(['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine'])
     const [tagMode, setTagMode] = useState<string | null>(null);
+    const [cardDetailsCache, setCardDetailsCache] = useState<Record<string, any>>({});
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['MAIN']));
 
     // Safe JSON parse helper
     const safeMsgParse = (jsonString: string): string[] => {
@@ -147,33 +148,50 @@ function Dashboard() {
         'Handtrap': 'border-red-500',
         'Board Breaker': 'border-yellow-500',
         'Engine': 'border-purple-500',
-        'Non-Engine': 'border-gray-500'
+        'Non-Engine': 'border-gray-500',
+        'Brick': 'border-white'
     };
 
     const handleCardClick = (card: any) => {
         if (tagMode) {
             toggleTag(card.id, tagMode);
         } else {
-            setSelectedCard(card);
-            setIsTagModalOpen(true);
+            const cardName = card.cardName || card.card_name;
+            if (cardDetailsCache[cardName]) {
+                setSelectedCard(cardDetailsCache[cardName]);
+                setIsTagModalOpen(true);
+            } else {
+                fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(cardName)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const match = data.find((c: any) => c.name.toLowerCase() === cardName.toLowerCase()) || data[0];
+                        if (match) {
+                            // Merge missing info from the search API (like desc) into the card object
+                            const fullCard = { ...card, ...match };
+                            setCardDetailsCache(prev => ({ ...prev, [cardName]: fullCard }));
+                            setSelectedCard(fullCard);
+                        } else {
+                            setSelectedCard(card);
+                        }
+                        setIsTagModalOpen(true);
+                    })
+                    .catch(err => {
+                        console.error('Error fetching card details:', err);
+                        setSelectedCard(card);
+                        setIsTagModalOpen(true);
+                    });
+            }
         }
     };
 
-    const renderDeckSection = (title: string, area: string) => {
+    const renderDeckSection = (_title: string, area: string) => {
         if (!deck || !deck.cards) return null;
         const areaCards = deck.cards.filter((c: any) => c.area === area);
         if (areaCards.length === 0) return null;
 
         return (
             <div className="mb-10">
-                <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-primary whitespace-nowrap">{title}</h2>
-                    <div className="h-px bg-primary/30 flex-1"></div>
-                    <span className="text-[10px] font-black text-slate-500 uppercase">
-                        {areaCards.reduce((acc: number, c: any) => acc + c.quantity, 0)} Cards
-                    </span>
-                </div>
-                <div className="grid grid-cols-8 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-0.5 sm:gap-1 md:gap-2">
+                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-0.5 sm:gap-1 md:gap-2">
                     {areaCards.map((card: any) => (
                         Array(card.quantity).fill(card).map((_, i) => {
                             const rawTags = card.customTags || card.custom_tags;
@@ -186,7 +204,7 @@ function Dashboard() {
                             return (
                                 <div
                                     key={`${card.id}-${i}`}
-                                    className={`aspect-[2.5/3.6] relative group cursor-pointer overflow-hidden rounded-sm border-2 transition-all ${activeBorderColor} ${tagMode ? 'hover:scale-95' : 'hover:border-primary/50'}`}
+                                    className={`aspect-[2.5/3.6] relative group cursor-pointer overflow-hidden rounded-sm border-2 transition-all ${card.quantity > 3 ? 'border-red-500/80 ring-1 ring-red-500/50' : activeBorderColor} ${tagMode ? 'hover:scale-95' : 'hover:border-primary/50'}`}
                                     onClick={() => handleCardClick(card)}
                                 >
                                     <img
@@ -198,7 +216,7 @@ function Dashboard() {
                                     {/* Tag Indicators */}
                                     <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 flex flex-wrap gap-0.5 pointer-events-none">
                                         {tags.map((tag: string) => (
-                                            <div key={tag} className={`bg-black/90 text-white text-[3px] sm:text-[5px] font-black px-0.5 sm:px-1 rounded-sm uppercase ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
+                                            <div key={tag} className={`bg-black/90 text-white text-[3px] sm:text-[5px] font-black px-0.5 sm:px-1 rounded-sm uppercase flex items-center gap-0.5 ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
                                                 {tag}
                                             </div>
                                         ))}
@@ -223,7 +241,7 @@ function Dashboard() {
     }
 
     return (
-        <main className="max-w-[1600px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
+        <main className="w-full max-w-[100vw] sm:max-w-[1600px] mx-auto px-2 sm:px-6 py-4 sm:py-8 pb-16 overflow-x-hidden box-border">
             <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end border-b border-primary/20 pb-4 gap-3">
                 <div>
                     <h1 className="text-2xl sm:text-4xl font-black italic uppercase text-white leading-none">{deck.name}</h1>
@@ -234,7 +252,7 @@ function Dashboard() {
                 <div className="flex flex-col items-start sm:items-end gap-2">
                     <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase block">Interactive Tagging Mode</span>
                     <div className="flex overflow-x-auto bg-slate-900 p-1 rounded-lg border border-slate-800 max-w-full">
-                        {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine'].map(cat => (
+                        {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine', 'Brick'].map(cat => (
                             <button
                                 key={cat}
                                 onClick={() => setTagMode(tagMode === cat ? null : cat)}
@@ -260,13 +278,52 @@ function Dashboard() {
             </div>
 
             <section className="mb-12">
-                {renderDeckSection("Main Deck", "MAIN")}
-                {renderDeckSection("Extra Deck", "EXTRA")}
-                {renderDeckSection("Side Deck", "SIDE")}
+                {/* Accordion Deck Sections */}
+                {[
+                    { id: 'MAIN', title: 'Main Deck' },
+                    { id: 'EXTRA', title: 'Extra Deck' },
+                    { id: 'SIDE', title: 'Side Deck' }
+                ].map(section => {
+                    const areaCards = deck.cards.filter((c: any) => c.area === section.id);
+                    if (areaCards.length === 0) return null;
+                    const count = areaCards.reduce((acc: number, c: any) => acc + c.quantity, 0);
+                    const isExpanded = expandedSections.has(section.id);
+
+                    return (
+                        <div key={section.id} className="mb-4">
+                            <button
+                                onClick={() => {
+                                    setExpandedSections(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(section.id)) next.delete(section.id);
+                                        else next.add(section.id);
+                                        return next;
+                                    });
+                                }}
+                                className="w-full flex items-center gap-3 py-3 px-4 rounded-lg bg-slate-900/50 border border-white/5 hover:border-primary/30 transition-all group cursor-pointer"
+                            >
+                                <span className={`material-icons text-[16px] text-primary transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                                <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-primary whitespace-nowrap">{section.title}</h2>
+                                <div className="h-px bg-primary/20 flex-1"></div>
+                                <span className="text-[10px] font-black text-slate-500 uppercase">{count} Cards</span>
+                            </button>
+                            <div
+                                className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                                style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr', opacity: isExpanded ? 1 : 0 }}
+                            >
+                                <div className="overflow-hidden">
+                                    <div className="mt-3">
+                                        {renderDeckSection(section.title, section.id)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
 
                 {isTagModalOpen && selectedCard && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-card-dark border border-primary/20 rounded-xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setIsTagModalOpen(false)}>
+                        <div className="bg-card-dark border border-primary/20 rounded-2xl shadow-2xl max-w-3xl w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-between items-start mb-6">
                                 <div>
                                     <h3 className="text-xl font-black italic uppercase text-white">{selectedCard.cardName || selectedCard.card_name}</h3>
@@ -277,35 +334,27 @@ function Dashboard() {
                                 </button>
                             </div>
 
-                            <div className="flex gap-4 mb-8">
-                                <img src={selectedCard.imageUrl || selectedCard.image_url} alt={selectedCard.cardName || selectedCard.card_name} className="w-24 rounded border border-white/10" />
-                                <div className="flex-1 space-y-2">
-                                    <div className="text-[9px] font-black text-primary uppercase tracking-tighter">Current Tags:</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {safeMsgParse(selectedCard.customTags || selectedCard.custom_tags).map((tag: string) => (
-                                            <span key={tag} className="bg-primary text-background-dark text-[10px] font-black px-2 py-1 rounded uppercase flex items-center gap-1">
-                                                {tag}
-                                                <span className="material-icons text-[12px] cursor-pointer" onClick={() => toggleTag(selectedCard.id, tag)}>close</span>
-                                            </span>
-                                        ))}
+                            <div className="flex flex-col md:flex-row gap-6 mb-8">
+                                <img src={selectedCard.imageUrl || selectedCard.image_url} alt={selectedCard.cardName || selectedCard.card_name} className="w-full md:w-48 h-auto rounded border border-white/10 shadow-xl" />
+                                <div className="flex-1 min-w-0 flex flex-col gap-3">
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-black uppercase rounded-full border border-primary/20">{selectedCard.type || selectedCard.card_type}</span>
+                                        {selectedCard.race && <span className="px-2 py-0.5 bg-accent-blue/10 text-accent-blue text-[9px] font-black uppercase rounded-full border border-accent-blue/20">{selectedCard.race}</span>}
+                                        {selectedCard.attribute && <span className="px-2 py-0.5 bg-accent-purple/10 text-accent-purple text-[9px] font-black uppercase rounded-full border border-accent-purple/20">{selectedCard.attribute}</span>}
+                                    </div>
+                                    {!((selectedCard.type || selectedCard.card_type)?.toLowerCase().includes('spell') || (selectedCard.type || selectedCard.card_type)?.toLowerCase().includes('trap')) && (
+                                        <div className="flex gap-4 text-[11px] font-black">
+                                            {selectedCard.level !== undefined && <span className="text-yellow-400">★ {selectedCard.level}</span>}
+                                            {selectedCard.atk !== undefined && <span className="text-red-400">ATK {selectedCard.atk}</span>}
+                                            {selectedCard.def !== undefined && <span className="text-blue-400">DEF {selectedCard.def}</span>}
+                                        </div>
+                                    )}
+                                    <div className="bg-black/30 rounded-xl p-4 border border-white/10 flex-1 max-h-[150px] overflow-y-auto custom-scrollbar shadow-inner">
+                                        <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedCard.desc || 'No description available.'}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="text-[11px] font-black text-white uppercase tracking-widest border-b border-primary/10 pb-2">Available Categories</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {availableCategories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={() => toggleTag(selectedCard.id, cat)}
-                                            className={`py-2 px-3 rounded text-[10px] font-black uppercase transition-all border ${safeMsgParse(selectedCard.customTags || selectedCard.custom_tags).includes(cat) ? 'bg-primary text-background-dark border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-primary/50'}`}
-                                        >
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -374,7 +423,8 @@ function Dashboard() {
                             { name: 'Handtrap', color: 'bg-red-500' },
                             { name: 'Board Breaker', color: 'bg-yellow-500' },
                             { name: 'Engine', color: 'bg-purple-500' },
-                            { name: 'Non-Engine', color: 'bg-gray-500' }
+                            { name: 'Non-Engine', color: 'bg-gray-500' },
+                            { name: 'Brick', color: 'bg-white' }
                         ].map(config => {
                             const cat = config.name;
                             const taggedCards = (deck.cards || []).filter((c: any) => {
@@ -411,61 +461,73 @@ function Dashboard() {
                 </div>
             </div>
 
-            <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl mt-4 sm:mt-6">
-                <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary mb-4 sm:mb-6">Probability Explorer (Draw 5)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-                    {[
-                        { name: 'Starter', color: 'text-green-500' },
-                        { name: 'Extender', color: 'text-blue-500' },
-                        { name: 'Handtrap', color: 'text-red-500' },
-                        { name: 'Board Breaker', color: 'text-yellow-500' },
-                        { name: 'Engine', color: 'text-purple-500' },
-                        { name: 'Non-Engine', color: 'text-gray-500' }
-                    ].map(config => {
-                        const cat = config.name;
-                        const taggedCards = (deck.cards || []).filter((c: any) => safeMsgParse(c.customTags || c.custom_tags).includes(cat));
-                        const countInDeck = taggedCards.reduce((acc: number, c: any) => acc + (c.quantity || 1), 0);
-                        const N = (deck.cards || []).filter((c: any) => c.area === 'MAIN').reduce((acc: number, c: any) => acc + (c.quantity || 1), 0) || 1;
+            {(() => {
+                const probCategories = ['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine', 'Brick'];
+                const hasAnyTaggedCards = probCategories.some(cat =>
+                    (deck.cards || []).some((c: any) => safeMsgParse(c.customTags || c.custom_tags).includes(cat))
+                );
+                if (!hasAnyTaggedCards) return null;
+                return (
+                    <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl mt-4 sm:mt-6">
+                        <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary mb-4 sm:mb-6">Probability Explorer (Draw 5)</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+                            {[
+                                { name: 'Starter', color: 'text-green-500' },
+                                { name: 'Extender', color: 'text-blue-500' },
+                                { name: 'Handtrap', color: 'text-red-500' },
+                                { name: 'Board Breaker', color: 'text-yellow-500' },
+                                { name: 'Engine', color: 'text-purple-500' },
+                                { name: 'Non-Engine', color: 'text-gray-500' },
+                                { name: 'Brick', color: 'text-white' }
+                            ].map(config => {
+                                const cat = config.name;
+                                const taggedCards = (deck.cards || []).filter((c: any) => safeMsgParse(c.customTags || c.custom_tags).includes(cat));
+                                const countInDeck = taggedCards.reduce((acc: number, c: any) => acc + (c.quantity || 1), 0);
+                                const N = (deck.cards || []).filter((c: any) => c.area === 'MAIN').reduce((acc: number, c: any) => acc + (c.quantity || 1), 0) || 1;
 
-                        if (countInDeck === 0) return null;
+                                if (countInDeck === 0) return null;
 
-                        // Hand size is 5, but capped at N
-                        const n = Math.min(5, N);
+                                // Hand size is 5, but capped at N
+                                const n = Math.min(5, N);
 
-                        const p0 = getHypergeometric(N, countInDeck, n, 0) * 100;
-                        const p1 = getHypergeometric(N, countInDeck, n, 1) * 100;
-                        const p2 = getHypergeometric(N, countInDeck, n, 2) * 100;
-                        const p3Plus = Math.max(0, 100 - (p0 + p1 + p2));
+                                const p0 = getHypergeometric(N, countInDeck, n, 0) * 100;
+                                const p1 = getHypergeometric(N, countInDeck, n, 1) * 100;
+                                const p2 = getHypergeometric(N, countInDeck, n, 2) * 100;
+                                const p3Plus = Math.max(0, 100 - (p0 + p1 + p2));
 
-                        return (
-                            <div key={cat} className="space-y-4 bg-slate-900/40 p-4 rounded-lg border border-white/5">
-                                <div className="flex justify-between items-center">
-                                    <span className={`text-[11px] font-black uppercase ${config.color}`}>{cat}</span>
-                                    <span className="text-[9px] text-slate-500 font-bold uppercase">{countInDeck} in Deck</span>
-                                </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {[
-                                        { label: '0x', val: p0, color: 'bg-slate-700' },
-                                        { label: '1x', val: p1, color: 'bg-primary' },
-                                        { label: '2x', val: p2, color: 'bg-primary/70' },
-                                        { label: '3x+', val: p3Plus, color: 'bg-primary/40' }
-                                    ].map(row => (
-                                        <div key={row.label} className="flex flex-col items-center">
-                                            <div className="w-full bg-slate-800 h-10 rounded-sm relative overflow-hidden mb-1">
-                                                <div className={`absolute bottom-0 w-full ${row.color}`} style={{ height: `${row.val}%` }}></div>
-                                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white mix-blend-difference">{row.val.toFixed(0)}%</span>
-                                            </div>
-                                            <span className="text-[8px] text-slate-500 font-black uppercase">{row.label}</span>
+                                return (
+                                    <div key={cat} className="space-y-4 bg-slate-900/40 p-4 rounded-lg border border-white/5">
+                                        <div className="flex justify-between items-center">
+                                            <span className={`text-[11px] font-black uppercase flex items-center gap-1.5 ${config.color}`}>
+                                                {cat}
+                                            </span>
+                                            <span className="text-[9px] text-slate-500 font-bold uppercase">{countInDeck} in Deck</span>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {[
+                                                { label: '0x', val: p0, color: 'bg-slate-700' },
+                                                { label: '1x', val: p1, color: 'bg-primary' },
+                                                { label: '2x', val: p2, color: 'bg-primary/70' },
+                                                { label: '3x+', val: p3Plus, color: 'bg-primary/40' }
+                                            ].map(row => (
+                                                <div key={row.label} className="flex flex-col items-center">
+                                                    <div className="w-full bg-slate-800 h-10 rounded-sm relative overflow-hidden mb-1">
+                                                        <div className={`absolute bottom-0 w-full ${row.color}`} style={{ height: `${row.val}%` }}></div>
+                                                        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white mix-blend-difference">{row.val.toFixed(0)}%</span>
+                                                    </div>
+                                                    <span className="text-[8px] text-slate-500 font-black uppercase">{row.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
 
-            <section className="mt-6 sm:mt-8 bg-black/40 border border-primary/20 rounded p-4 sm:p-8 relative">
+            <section className="mt-6 sm:mt-8 mb-8 bg-black/40 border border-primary/20 rounded p-4 sm:p-8 relative">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 sm:mb-10 gap-3">
                     <div>
                         <h2 className="text-xl sm:text-2xl font-black italic uppercase text-white">Sample Opening Hand</h2>
