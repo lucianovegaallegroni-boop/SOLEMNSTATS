@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "api": "tsx api-runner.cjs",
-    "dev": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run api\" \"npm run dev --prefix frontend\"",
     "build": "npm install --prefix frontend && npm run build --prefix frontend",
     "vercel-build": "cd frontend && npm install && npm run build"
   },
@@ -32,6 +32,7 @@
   "devDependencies": {
     "@types/node": "^25.2.3",
     "@vercel/node": "^5.6.3",
+    "concurrently": "^9.2.1",
     "typescript": "^5.9.3"
   }
 }

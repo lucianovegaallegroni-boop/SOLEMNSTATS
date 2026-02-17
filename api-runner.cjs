@@ -3,7 +3,9 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+// Load root .env first, then frontend/.env (which has the Supabase credentials)
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, 'frontend', '.env'), override: true });
 
 const app = express();
 app.use(cors());
@@ -13,6 +15,7 @@ app.use(express.json());
 const runHandler = async (handlerPath, req, res, extraQuery = {}) => {
     try {
         console.log(`Calling handler: ${handlerPath}`);
+
         const { default: handler } = await import(`file://${path.resolve(handlerPath)}?update=${Date.now()}`);
 
         // Build a Vercel-like request object with merged query params
@@ -78,7 +81,37 @@ app.all('/api/:sub/:id', (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.all('/api/:sub/:id/:action', (req, res) => {
+    const { sub, id, action } = req.params;
+
+    // Check for api/sub/[id]/action.ts
+    // e.g. api/deck/[id]/combos.ts
+    const actionFile = path.join(__dirname, 'api', sub, '[id]', `${action}.ts`);
+
+    if (fs.existsSync(actionFile)) {
+        return runHandler(actionFile, req, res, { id });
+    }
+
+    res.status(404).json({ error: `Function ${sub}/${id}/${action} not found` });
+});
+
+const PORT = process.env.PORT || 3010;
+const server = app.listen(PORT, () => {
     console.log(`Local API Runner listening on http://localhost:${PORT}`);
 });
+
+// Keep process alive and better error handling
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
+
+// Heartbeat to prevent premature exit and confirm it's alive
+setInterval(() => {
+    // just keep the event loop busy
+}, 10000);
+
+console.log('API Runner initialized. Event loop should be active.');

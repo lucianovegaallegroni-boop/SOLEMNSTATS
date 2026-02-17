@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import ComboTracker from './pages/ComboTracker'
 import Decks from './pages/Decks'
 import EditDeck from './pages/EditDeck'
+import Combos from './pages/Combos'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -16,6 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<App />}>
           <Route index element={<Home />} />
           <Route path="dashboard/:id" element={<Dashboard />} />
+          <Route path="combos/:id" element={<Combos />} />
           <Route path="combo" element={<ComboTracker />} />
           <Route path="decks" element={<Decks />} />
           <Route path="edit-deck/:id" element={<EditDeck />} />

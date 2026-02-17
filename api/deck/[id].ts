@@ -95,14 +95,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // If lists were provided, rebuild cards
         if (allCards.length > 0) {
-            // Delete old cards
+            // 1. Fetch current cards to cache their metadata (images, types, etc.)
+            const { data: currentCards } = await supabase
+                .from('deck_cards')
+                .select('card_name, card_type, image_url, attribute, level, atk, defense')
+                .eq('deck_id', id);
+
+            // Create a map of "normalized_name" -> metadata
+            const existingMetaMap = new Map();
+            if (currentCards) {
+                currentCards.forEach((c: any) => {
+                    if (c.card_name) {
+                        existingMetaMap.set(c.card_name.toLowerCase(), c);
+                    }
+                });
+            }
+
+            // 2. Delete old cards
             await supabase.from('deck_cards').delete().eq('deck_id', id);
 
             const cardsToInsert = [];
             for (const cardData of allCards) {
-                let meta = metadata[cardData.name.toLowerCase()];
+                const lowerName = cardData.name.toLowerCase();
+
+                // Priority 1: Use metadata from the batch fetch (if it was a new card that we fetched)
+                let meta = metadata[lowerName];
                 let cardName = cardData.name;
 
+                // Priority 2: Use existing metadata from the DB (preserves images if API fails)
+                if (!meta && existingMetaMap.has(lowerName)) {
+                    const existing = existingMetaMap.get(lowerName);
+                    meta = {
+                        type: existing.card_type,
+                        image_url: existing.image_url,
+                        attribute: existing.attribute,
+                        level: existing.level,
+                        atk: existing.atk,
+                        def: existing.defense // Note: DB column is 'defense', standard object is 'def'
+                    };
+                    cardName = existing.card_name || cardData.name;
+                }
+
+                // Priority 3: Fuzzy search fallback (slow, last resort)
                 if (!meta) {
                     const fuzzy = await findBestMatch(cardData.name);
                     if (fuzzy) {

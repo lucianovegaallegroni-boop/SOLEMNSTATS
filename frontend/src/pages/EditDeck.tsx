@@ -277,7 +277,7 @@ function EditDeck() {
                                     ></textarea>
 
                                     {activeTab === area && suggestions.length > 0 && (
-                                        <div className={`absolute bottom-4 right-4 z-50 bg-card-dark border rounded-lg shadow-2xl p-2 min-w-[200px] max-h-[300px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-2 ${area === 'MAIN' ? 'border-primary/30' : area === 'EXTRA' ? 'border-accent-blue/30' : 'border-accent-purple/30'}`}>
+                                        <div className={`absolute bottom-4 right-4 z-[9999] bg-card-dark border rounded-lg shadow-2xl p-2 min-w-[200px] max-h-[300px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-2 ${area === 'MAIN' ? 'border-primary/30' : area === 'EXTRA' ? 'border-accent-blue/30' : 'border-accent-purple/30'}`}>
                                             <p className={`text-[10px] font-black uppercase mb-2 tracking-widest border-b pb-1 ${area === 'MAIN' ? 'text-primary border-primary/10' : area === 'EXTRA' ? 'text-accent-blue border-accent-blue/10' : 'text-accent-purple border-accent-purple/10'}`}>Suggestions (Shift)</p>
                                             <div className="space-y-1 overflow-y-auto custom-scrollbar pr-1">
                                                 {suggestions.map((card, idx) => (

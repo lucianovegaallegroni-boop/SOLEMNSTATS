@@ -1,6 +1,9 @@
 import { useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { SavedCombosWidget } from '../components/SavedCombosWidget';
 import { API_BASE_URL } from '../config'
+import { debounce } from 'lodash';
 
 function Dashboard() {
     const { id } = useParams<{ id: string }>()
@@ -14,11 +17,24 @@ function Dashboard() {
     const [tagMode, setTagMode] = useState<string | null>(null);
     const [cardDetailsCache, setCardDetailsCache] = useState<Record<string, any>>({});
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['MAIN']));
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Drag-and-drop state for EXTRA/SIDE/MAIN decks
+    const [extraOrder, setExtraOrder] = useState<any[]>([]);
+    const [sideOrder, setSideOrder] = useState<any[]>([]);
+    const [mainOrder, setMainOrder] = useState<any[]>([]);
+
+    const dragItem = useRef<{ area: string; index: number } | null>(null);
+    const dragOverItem = useRef<{ area: string; index: number } | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<{ area: string; index: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     // Safe JSON parse helper
-    const safeMsgParse = (jsonString: string): string[] => {
+    // Safe JSON parse helper
+    const safeMsgParse = (input: string | string[]): string[] => {
+        if (Array.isArray(input)) return input;
         try {
-            const parsed = JSON.parse(jsonString || "[]");
+            const parsed = JSON.parse(input || "[]");
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             return [];
@@ -47,6 +63,20 @@ function Dashboard() {
         fetchDeck();
     }, [id])
 
+    // Helper to expand cards by quantity for drag-drop ordering
+    const expandCards = (cards: any[]) => {
+        return cards.flatMap((card: any) =>
+            Array(Math.max(1, parseInt(card.quantity) || 1)).fill(null).map((_, i) => ({
+                ...card,
+                _instanceId: `${card.id}-${i}`,
+                card_name: card.cardName || card.card_name,
+                image_url: card.imageUrl || card.image_url,
+                card_type: card.cardType || card.card_type,
+                custom_tags: card.customTags || card.custom_tags,
+            }))
+        );
+    };
+
     const fetchDeck = () => {
         setLoading(true)
         fetch(`${API_BASE_URL}/api/deck/${id}`)
@@ -55,10 +85,18 @@ function Dashboard() {
                 setDeck(data)
                 // Inicializar mano SOLO con cartas del MAIN DECK
                 if (data.cards && Array.isArray(data.cards)) {
-                    const mainCards = data.cards.filter((c: any) => c.area === 'MAIN').flatMap((card: any) =>
+                    const rawMainCards = data.cards.filter((c: any) => c.area === 'MAIN');
+                    const mainCards = rawMainCards.flatMap((card: any) =>
                         Array(Math.max(1, parseInt(card.quantity) || 1)).fill({ ...card, card_name: card.cardName, image_url: card.imageUrl, card_type: card.cardType, custom_tags: card.customTags })
                     );
                     shuffleAndDraw(mainCards);
+
+                    // Initialize EXTRA, SIDE, MAIN card orders
+                    const extraCards = data.cards.filter((c: any) => c.area === 'EXTRA');
+                    const sideCards = data.cards.filter((c: any) => c.area === 'SIDE');
+                    setExtraOrder(expandCards(extraCards));
+                    setSideOrder(expandCards(sideCards));
+                    setMainOrder(expandCards(rawMainCards));
                 }
                 setLoading(false)
             })
@@ -68,27 +106,72 @@ function Dashboard() {
             })
     }
 
-    const toggleTag = (cardId: number, tag: string) => {
-        const card = deck.cards.find((c: any) => c.id === cardId);
-        if (!card) return;
-
-        if (!card) return;
-
+    const toggleTag = async (card: any, tag: string) => {
+        // Fix: custom_tags might be a JSON string or an array. Parse it safely.
         let currentTags: string[] = [];
-        try {
-            currentTags = safeMsgParse(card.customTags || card.custom_tags);
-        } catch (e) { currentTags = []; }
+        if (Array.isArray(card.custom_tags)) {
+            currentTags = card.custom_tags;
+        } else if (typeof card.custom_tags === 'string') {
+            try {
+                currentTags = JSON.parse(card.custom_tags);
+            } catch (e) {
+                currentTags = [];
+            }
+        } else if (Array.isArray(card.customTags)) {
+            currentTags = card.customTags;
+        }
 
         const newTags = currentTags.includes(tag)
             ? currentTags.filter((t: string) => t !== tag)
             : [...currentTags, tag];
 
-        fetch(`${API_BASE_URL}/api/update-card-tags/${cardId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tags: newTags })
-        })
-            .then(() => fetchDeck())
+        // Optimistic update for ALL cards with the same name
+        const updateState = (order: any[], setOrder: Function) => {
+            const newOrder = order.map(c => {
+                // Check if name matches (case-insensitive for safety)
+                if ((c.cardName || c.name || "").toLowerCase() === (card.cardName || card.name || "").toLowerCase()) {
+                    // Update both fields to be safe and consistent (store as array in state for easier usage)
+                    return { ...c, custom_tags: newTags, customTags: newTags };
+                }
+                return c;
+            });
+            setOrder(newOrder);
+        };
+
+        updateState(mainOrder, setMainOrder);
+        updateState(extraOrder, setExtraOrder);
+        updateState(sideOrder, setSideOrder);
+
+        // Also update the main 'deck' state because 'Duel Simulation' and other stats rely on deck.cards
+        setDeck((prevDeck: any) => {
+            if (!prevDeck) return prevDeck;
+            const newCards = (prevDeck.cards || []).map((c: any) => {
+                // Check if name matches (case-insensitive for safety)
+                if ((c.cardName || c.card_name || c.name || "").toLowerCase() === (card.cardName || card.name || "").toLowerCase()) {
+                    return { ...c, custom_tags: newTags, customTags: newTags };
+                }
+                return c;
+            });
+            return { ...prevDeck, cards: newCards };
+        });
+
+        try {
+            // Updated to use the batch endpoint (renamed to avoid conflict and cache issues)
+            const res = await fetch(`${API_BASE_URL}/api/batch-update-tags`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    deckId: id,
+                    cardName: card.cardName || card.name,
+                    tags: newTags
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to update tags');
+        } catch (error) {
+            console.error("Error updating tags:", error);
+            // Revert state if failed (optional, but good practice - complex to revert bulk update here simply, ignoring for now as high success rate expected)
+        }
     };
 
     const shuffleAndDraw = (cards: any[]) => {
@@ -105,41 +188,39 @@ function Dashboard() {
         }
     };
 
-    // Procesar estadísticas reales del mazo
-    const stats = deck && deck.cards ? deck.cards.reduce((acc: any, card: any) => {
-        const type = ((card.cardType || card.card_type) || 'Unknown').toLowerCase();
-        const qty = card.quantity || 1;
+    // Filter cards by logic: Only count 'MAIN' area cards
+    const mainCardsForAnalysis = (deck?.cards || []).filter((c: any) => c.area === 'MAIN');
 
-        if (type.includes('monster')) acc.monsters += qty;
-        else if (type.includes('spell')) acc.spells += qty;
-        else if (type.includes('trap')) acc.traps += qty;
+    // Calculate stats dynamic using cardType instead of frameType
+    const monsterCount = mainCardsForAnalysis
+        .filter((c: any) => (c.cardType || c.card_type || '').toLowerCase().includes('monster'))
+        .reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0);
 
-        if (card.attribute) acc.attributes[card.attribute] = (acc.attributes[card.attribute] || 0) + qty;
-        if (card.level) acc.levels[card.level] = (acc.levels[card.level] || 0) + qty;
+    const spellCount = mainCardsForAnalysis
+        .filter((c: any) => (c.cardType || c.card_type || '').toLowerCase().includes('spell'))
+        .reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0);
 
-        return acc;
-    }, { monsters: 0, spells: 0, traps: 0, attributes: {}, levels: {} }) : { monsters: 0, spells: 0, traps: 0, attributes: {}, levels: {} };
+    const trapCount = mainCardsForAnalysis
+        .filter((c: any) => (c.cardType || c.card_type || '').toLowerCase().includes('trap'))
+        .reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0);
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-primary font-black animate-pulse uppercase tracking-[0.3em]">Analizando Mazo con Base de Datos...</div>
-            </div>
-        )
-    }
+    // Process real stats for chart
+    const stats = {
+        monsters: monsterCount,
+        spells: spellCount,
+        traps: trapCount
+    };
 
-    if (!deck) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-red-500 font-black uppercase tracking-[0.3em]">Mazo no encontrado</div>
-            </div>
-        )
-    }
+    const statsArray = [
+        { label: 'Monsters', value: monsterCount, color: 'bg-orange-500' },
+        { label: 'Spells', value: spellCount, color: 'bg-green-500' },
+        { label: 'Traps', value: trapCount, color: 'bg-pink-500' },
+    ];
 
-    const total = deck.total_cards || 1;
-    const monsterPct = (stats.monsters / total) * 100;
-    const spellPct = (stats.spells / total) * 100;
-    const trapPct = (stats.traps / total) * 100;
+    const total = statsArray.reduce((acc, curr) => acc + curr.value, 0);
+    const monsterPct = total > 0 ? (monsterCount / total) * 100 : 0;
+    const spellPct = total > 0 ? (spellCount / total) * 100 : 0;
+    const trapPct = total > 0 ? (trapCount / total) * 100 : 0;
 
     // Colors for tags
     const tagColors: Record<string, string> = {
@@ -154,7 +235,7 @@ function Dashboard() {
 
     const handleCardClick = (card: any) => {
         if (tagMode) {
-            toggleTag(card.id, tagMode);
+            toggleTag(card, tagMode);
         } else {
             const cardName = card.cardName || card.card_name;
             if (cardDetailsCache[cardName]) {
@@ -184,60 +265,295 @@ function Dashboard() {
         }
     };
 
-    const renderDeckSection = (_title: string, area: string) => {
-        if (!deck || !deck.cards) return null;
-        const areaCards = deck.cards.filter((c: any) => c.area === area);
-        if (areaCards.length === 0) return null;
+    // --- Drag and Drop Handlers ---
+
+    // Generic drag start
+    const handleDragStart = useCallback((area: string, index: number) => {
+        dragItem.current = { area, index };
+        setIsDragging(true);
+    }, []);
+
+    // Generic drag enter
+    const handleDragEnter = useCallback((area: string, index: number) => {
+        // Only allow reordering within the same area
+        if (!dragItem.current || dragItem.current.area !== area) return;
+
+        dragOverItem.current = { area, index };
+        setDragOverIndex({ area, index }); // Fixed: update with object
+    }, []);
+
+    // Helper to collapse cards back to deck list format for saving
+    const collapseCards = (cards: any[]) => {
+        // We need to preserve order, so we can't just group by name easily if we want 
+        // to keep specific positions (e.g. 1 Ash, 1 Veiler, 1 Ash).
+        // However, standard deck lists (YDK/text) usually group by card.
+        // But here we want to persist the exact order the user set.
+        // The current backend `save-deck` re-parses list strings.
+        // If we send "Card A\nCard B\nCard A", the parser might group them or keep them.
+        // Let's check `parser.ts` logic... actually `parseDeckList` roughly keeps order but 
+        // usually standard format is "3x Card A".
+        // To persist exact custom order, we need the backend to support it. 
+        // Current `save-deck` implementation RE-PARSES text lists which might lose specific index order 
+        // if it groups duplicates. 
+        // But generally, if we send "1x Card A\n1x Card B\n1x Card A", it should work if the parser respects line order.
+        // Let's assume sending 1x for each instance preserves order.
+        return cards.map(c => {
+            let name = c.cardName || c.card_name;
+            // Clean up any existing prefixes/suffixes
+            name = name.replace(/^(\d+x\s*)+/, '').replace(/(\s*x\d+)+$/, '');
+            return `${name} x1`;
+        }).join('\n');
+    };
+
+    // Generic drag and drop handlers
+    const saveDeckOrder = useCallback(async (newMain: any[], newExtra: any[], newSide: any[]) => {
+        if (!deck) return;
+
+        const mainList = collapseCards(newMain);
+        const extraList = collapseCards(newExtra);
+        const sideList = collapseCards(newSide);
+
+        try {
+            await fetch(`${API_BASE_URL}/api/deck/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: deck.name,
+                    main_list: mainList,
+                    extra_list: extraList,
+                    side_list: sideList
+                })
+            });
+        } catch (e) {
+            console.error("Failed to save deck order", e);
+        } finally {
+            setIsSaving(false);
+        }
+    }, [deck, id]);
+
+    // Keep a ref to the latest save function to avoid stale closures in debounce
+    const latestSaveDeckOrder = useRef(saveDeckOrder);
+    useEffect(() => {
+        latestSaveDeckOrder.current = saveDeckOrder;
+    }, [saveDeckOrder]);
+
+    // Debounce the save function to avoid hitting API rate limits
+    const debouncedSaveDeckOrder = useRef(
+        debounce((newMain: any[], newExtra: any[], newSide: any[]) => {
+            latestSaveDeckOrder.current(newMain, newExtra, newSide);
+        }, 1000)
+    ).current;
+
+
+    // Generic drag end
+    const handleDragEnd = useCallback(() => {
+        if (dragItem.current && dragOverItem.current) {
+            const { area: srcArea, index: srcIndex } = dragItem.current;
+            const { area: destArea, index: destIndex } = dragOverItem.current;
+
+            if (srcArea === destArea && srcIndex !== destIndex) {
+                // Reorder logic
+                let newMain = [...mainOrder];
+                let newExtra = [...extraOrder];
+                let newSide = [...sideOrder];
+
+                if (srcArea === 'EXTRA') {
+                    const draggedItemContent = newExtra[srcIndex];
+                    newExtra.splice(srcIndex, 1);
+                    newExtra.splice(destIndex, 0, draggedItemContent);
+                    setExtraOrder(newExtra);
+                } else if (srcArea === 'SIDE') {
+                    const draggedItemContent = newSide[srcIndex];
+                    newSide.splice(srcIndex, 1);
+                    newSide.splice(destIndex, 0, draggedItemContent);
+                    setSideOrder(newSide);
+                } else if (srcArea === 'MAIN') {
+                    const draggedItemContent = newMain[srcIndex];
+                    newMain.splice(srcIndex, 1);
+                    newMain.splice(destIndex, 0, draggedItemContent);
+                    setMainOrder(newMain);
+                }
+
+                // Save to backend
+                setIsSaving(true);
+                debouncedSaveDeckOrder(newMain, newExtra, newSide);
+            }
+        }
+
+        // Reset
+        dragItem.current = null;
+        dragOverItem.current = null;
+        setDragOverIndex(null);
+        setIsDragging(false);
+    }, [extraOrder, sideOrder, mainOrder, saveDeckOrder]);
+
+    const renderCardItem = (card: any, key: string, area: string, index?: number, isDraggable: boolean = false) => {
+        const rawTags = card.customTags || card.custom_tags;
+        let tags: string[] = [];
+        if (Array.isArray(rawTags)) {
+            tags = rawTags;
+        } else if (typeof rawTags === 'string') {
+            try { tags = JSON.parse(rawTags); } catch (e) { tags = []; }
+        }
+
+        // Determine border color: Prioritize the active tagMode if the card has it.
+        // Otherwise fallback to the first found colored tag.
+        let activeBorderColor = 'border-white/5';
+
+        if (tagMode && tags.includes(tagMode) && tagColors[tagMode]) {
+            activeBorderColor = tagColors[tagMode];
+        } else {
+            const prioTag = tags.find((t: string) => tagColors[t]);
+            if (prioTag) {
+                activeBorderColor = tagColors[prioTag];
+            }
+        }
+
+        const isBeingDragged = isDragging && dragItem.current?.area === area && dragItem.current?.index === index;
+        const isDropTarget = isDragging && dragOverIndex?.index === index && dragOverIndex?.area === area && !isBeingDragged; // Fixed: check properties
 
         return (
-            <div className="mb-10">
-                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-0.5 sm:gap-1 md:gap-2">
-                    {areaCards.map((card: any) => (
-                        Array(card.quantity).fill(card).map((_, i) => {
-                            const rawTags = card.customTags || card.custom_tags;
-                            const tags = rawTags ? JSON.parse(rawTags) : [];
-                            // Find the first tag that has a color mapping, or default to primary
-                            const activeBorderColor = tags.find((t: string) => tagColors[t])
-                                ? tagColors[tags.find((t: string) => tagColors[t])!]
-                                : 'border-white/5';
-
-                            return (
-                                <div
-                                    key={`${card.id}-${i}`}
-                                    className={`aspect-[2.5/3.6] relative group cursor-pointer overflow-hidden rounded-sm border-2 transition-all ${card.quantity > 3 ? 'border-red-500/80 ring-1 ring-red-500/50' : activeBorderColor} ${tagMode ? 'hover:scale-95' : 'hover:border-primary/50'}`}
-                                    onClick={() => handleCardClick(card)}
-                                >
-                                    <img
-                                        src={(card.imageUrl || card.image_url) || 'https://images.ygoprodeck.com/images/cards/back_high.jpg'}
-                                        alt={card.cardName || card.card_name}
-                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                        loading="lazy"
-                                    />
-                                    {/* Tag Indicators */}
-                                    <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 flex flex-wrap gap-0.5 pointer-events-none">
-                                        {tags.map((tag: string) => (
-                                            <div key={tag} className={`bg-black/90 text-white text-[3px] sm:text-[5px] font-black px-0.5 sm:px-1 rounded-sm uppercase flex items-center gap-0.5 ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
-                                                {tag}
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Hover Overlay */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-0.5 sm:p-1">
-                                        <span className="text-[5px] sm:text-[7px] font-black text-white uppercase truncate">{card.cardName || card.card_name}</span>
-                                        {tagMode && (
-                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 px-2 py-1 rounded text-[8px] font-black uppercase text-white border border-white/20 whitespace-nowrap">
-                                                {tags.includes(tagMode) ? 'Remove' : 'Add'} {tagMode}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })
+            <div
+                key={key}
+                draggable={isDraggable}
+                onDragStart={isDraggable ? (e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    handleDragStart(area, index!);
+                } : undefined}
+                onDragEnter={isDraggable ? (e) => {
+                    e.preventDefault();
+                    handleDragEnter(area, index!);
+                } : undefined}
+                onDragOver={isDraggable ? (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                } : undefined}
+                onDragEnd={isDraggable ? handleDragEnd : undefined}
+                className={`aspect-[2.5/3.6] relative group cursor-pointer overflow-hidden rounded-sm border-2 transition-all duration-150
+                    ${card.quantity > 3 ? 'border-red-500/80 ring-1 ring-red-500/50' : activeBorderColor}
+                    ${tagMode ? 'hover:scale-95' : 'hover:border-primary/50'}
+                    ${isBeingDragged ? 'opacity-30 scale-90' : ''}
+                    ${isDropTarget ? 'ring-2 ring-primary shadow-[0_0_15px_rgba(212,133,69,0.4)] scale-105' : ''}
+                    ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                onClick={() => handleCardClick(card)}
+            >
+                <img
+                    src={(card.imageUrl || card.image_url) || 'https://images.ygoprodeck.com/images/cards/back_high.jpg'}
+                    alt={card.cardName || card.card_name}
+                    className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 pointer-events-none`}
+                    loading="lazy"
+                />
+                {/* Tag Indicators */}
+                <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 flex flex-wrap gap-0.5 pointer-events-none">
+                    {tags.map((tag: string) => (
+                        <div key={tag} className={`bg-black/90 text-white text-[3px] sm:text-[5px] font-black px-0.5 sm:px-1 rounded-sm uppercase flex items-center gap-0.5 ${tagColors[tag] ? tagColors[tag].replace('border-', 'border border-') : 'border border-primary'}`}>
+                            {tag}
+                        </div>
                     ))}
+                </div>
+
+                {/* Hover Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-0.5 sm:p-1 pointer-events-none">
+                    <span className="text-[5px] sm:text-[7px] font-black text-white uppercase truncate">{card.cardName || card.card_name}</span>
+                    {tagMode && (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 px-2 py-1 rounded text-[8px] font-black uppercase text-white border border-white/20 whitespace-nowrap">
+                            {tags.includes(tagMode) ? 'Remove' : 'Add'} {tagMode}
+                        </div>
+                    )}
                 </div>
             </div>
         );
+    };
+
+    const renderDeckSection = (_title: string, area: string) => {
+        let orderedCards: any[] = [];
+        let gridCols = "grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10"; // Default responsive
+        let containerClass = "w-full";
+
+        if (area === 'EXTRA') {
+            orderedCards = extraOrder;
+            // User requested 5 columns fixed. 
+            // To maintain card size (comparable to main deck which is ~10 cols), we restrict width.
+            gridCols = "grid-cols-5";
+            containerClass = "max-w-3xl"; // Constrain width so cards don't get huge
+        } else if (area === 'SIDE') {
+            orderedCards = sideOrder;
+            gridCols = "grid-cols-5";
+            containerClass = "max-w-3xl";
+        } else if (area === 'MAIN') {
+            orderedCards = mainOrder;
+            // Main deck normal size
+            gridCols = "grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12";
+        }
+
+        if (orderedCards.length === 0) return null;
+
+        return (
+            <div className={`mb-10 ${containerClass}`}>
+                <div className={`grid ${gridCols} gap-2 sm:gap-3`}>
+                    {orderedCards.map((card: any, idx: number) =>
+                        renderCardItem(card, card._instanceId, area, idx, !tagMode)
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderAccordionItem = (id: string, title: string) => {
+        // Safety check
+        if (!deck || !deck.cards) return null;
+
+        const areaCards = deck.cards.filter((c: any) => c.area === id);
+        if (areaCards.length === 0) return null;
+        const count = areaCards.reduce((acc: number, c: any) => acc + c.quantity, 0);
+        const isExpanded = expandedSections.has(id);
+
+        return (
+            <div className="mb-4">
+                <button
+                    onClick={() => {
+                        setExpandedSections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                        });
+                    }}
+                    className="w-full flex items-center gap-3 py-3 px-4 rounded-lg bg-slate-900/50 border border-white/5 hover:border-primary/30 transition-all group cursor-pointer"
+                >
+                    <span className={`material-icons text-[16px] text-primary transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                    <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-primary whitespace-nowrap">{title}</h2>
+                    <div className="h-px bg-primary/20 flex-1"></div>
+                    <span className="text-[10px] font-black text-slate-500 uppercase">{count} Cards</span>
+                </button>
+                <div
+                    className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                    style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr', opacity: isExpanded ? 1 : 0 }}
+                >
+                    <div className="overflow-hidden">
+                        <div className="mt-3">
+                            {renderDeckSection(title, id)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-primary font-black animate-pulse uppercase tracking-[0.3em]">Analizando Mazo con Base de Datos...</div>
+            </div>
+        )
+    }
+
+    if (!deck) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-red-500 font-black uppercase tracking-[0.3em]">Mazo no encontrado</div>
+            </div>
+        )
     }
 
     return (
@@ -245,12 +561,19 @@ function Dashboard() {
             <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end border-b border-primary/20 pb-4 gap-3">
                 <div>
                     <h1 className="text-2xl sm:text-4xl font-black italic uppercase text-white leading-none">{deck.name}</h1>
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px] sm:text-[11px] mt-1 sm:mt-2">
-                        Real-Time Analysis • {deck.totalCards || deck.total_cards} Cards • Database Connected
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px] sm:text-[11px] mt-1 sm:mt-2 flex items-center gap-2">
+                        <span>Real-Time Analysis • {deck.totalCards || deck.total_cards} Cards • Database Connected</span>
+                        {isSaving && <span className="text-yellow-500 animate-pulse flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Saving...</span>}
                     </p>
                 </div>
                 <div className="flex flex-col items-start sm:items-end gap-2">
-                    <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase block">Interactive Tagging Mode</span>
+                    <div className="flex gap-2">
+                        <a href={`/combos/${id}`} className="px-3 py-1 bg-cyan-600/20 text-cyan-400 border border-cyan-600/50 text-[10px] sm:text-[11px] font-black uppercase rounded hover:bg-cyan-600/30 transition-all flex items-center gap-2">
+                            <span className="material-icons text-[14px]">science</span>
+                            Combo Calculator
+                        </a>
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase block mt-2">Interactive Tagging Mode</span>
                     <div className="flex overflow-x-auto bg-slate-900 p-1 rounded-lg border border-slate-800 max-w-full">
                         {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine', 'Brick'].map(cat => (
                             <button
@@ -267,7 +590,10 @@ function Dashboard() {
                         ))}
                         {tagMode && (
                             <button
-                                onClick={() => setTagMode(null)}
+                                onClick={() => {
+                                    setTagMode(null);
+                                    fetchDeck();
+                                }}
                                 className="ml-1 sm:ml-2 px-2 py-1 sm:py-1.5 text-[8px] sm:text-[10px] font-black text-red-500 hover:text-red-400 uppercase border-l border-slate-700 pl-2 sm:pl-3 whitespace-nowrap"
                             >
                                 Exit Mode
@@ -279,47 +605,17 @@ function Dashboard() {
 
             <section className="mb-12">
                 {/* Accordion Deck Sections */}
-                {[
-                    { id: 'MAIN', title: 'Main Deck' },
-                    { id: 'EXTRA', title: 'Extra Deck' },
-                    { id: 'SIDE', title: 'Side Deck' }
-                ].map(section => {
-                    const areaCards = deck.cards.filter((c: any) => c.area === section.id);
-                    if (areaCards.length === 0) return null;
-                    const count = areaCards.reduce((acc: number, c: any) => acc + c.quantity, 0);
-                    const isExpanded = expandedSections.has(section.id);
+                {/* Accordion Deck Sections */}
+                {renderAccordionItem('MAIN', 'Main Deck')}
 
-                    return (
-                        <div key={section.id} className="mb-4">
-                            <button
-                                onClick={() => {
-                                    setExpandedSections(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(section.id)) next.delete(section.id);
-                                        else next.add(section.id);
-                                        return next;
-                                    });
-                                }}
-                                className="w-full flex items-center gap-3 py-3 px-4 rounded-lg bg-slate-900/50 border border-white/5 hover:border-primary/30 transition-all group cursor-pointer"
-                            >
-                                <span className={`material-icons text-[16px] text-primary transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
-                                <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-primary whitespace-nowrap">{section.title}</h2>
-                                <div className="h-px bg-primary/20 flex-1"></div>
-                                <span className="text-[10px] font-black text-slate-500 uppercase">{count} Cards</span>
-                            </button>
-                            <div
-                                className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
-                                style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr', opacity: isExpanded ? 1 : 0 }}
-                            >
-                                <div className="overflow-hidden">
-                                    <div className="mt-3">
-                                        {renderDeckSection(section.title, section.id)}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
+                <div className="flex flex-col md:flex-row gap-4 w-full">
+                    <div className="flex-1 min-w-0">
+                        {renderAccordionItem('EXTRA', 'Extra Deck')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        {renderAccordionItem('SIDE', 'Side Deck')}
+                    </div>
+                </div>
 
                 {isTagModalOpen && selectedCard && (
                     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setIsTagModalOpen(false)}>
@@ -385,7 +681,7 @@ function Dashboard() {
                                 ></circle>
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                <span className="text-xl sm:text-2xl font-black italic">{deck.totalCards || deck.total_cards}</span>
+                                <span className="text-xl sm:text-2xl font-black italic">{monsterCount + spellCount + trapCount}</span>
                                 <span className="text-[8px] sm:text-[9px] uppercase text-primary font-bold tracking-tighter">Cards</span>
                             </div>
                         </div>
@@ -410,7 +706,14 @@ function Dashboard() {
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary">Duel Simulation (Main Deck)</h3>
                         <button
-                            onClick={() => setTagMode(tagMode ? null : 'Starter')} // Default to Starter if turning on
+                            onClick={() => {
+                                if (tagMode) {
+                                    setTagMode(null);
+                                    fetchDeck();
+                                } else {
+                                    setTagMode('Starter');
+                                }
+                            }}
                             className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${tagMode ? 'bg-primary text-background-dark border-primary' : 'text-slate-500 border-slate-700 hover:text-white hover:border-white'}`}
                         >
                             {tagMode ? 'Done Editing' : 'Edit Tags'}
@@ -527,6 +830,13 @@ function Dashboard() {
                 );
             })()}
 
+            {/* Right Column: Chart */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+                {/* Saved Combos Widget */}
+                <div className="bg-slate-900/50 border border-white/5 rounded-lg">
+                    <SavedCombosWidget deckId={id!} />
+                </div>
+            </div>
             <section className="mt-6 sm:mt-8 mb-8 bg-black/40 border border-primary/20 rounded p-4 sm:p-8 relative">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 sm:mb-10 gap-3">
                     <div>

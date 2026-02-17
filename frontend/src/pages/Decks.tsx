@@ -103,7 +103,7 @@ function Decks() {
 
                             <div className="flex items-center gap-2 pt-4 border-t border-slate-800">
                                 <Link to={`/dashboard/${deck.id}`} className="flex-1 py-2 text-center bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-black uppercase tracking-widest transition-all">
-                                    Analytics
+                                    View
                                 </Link>
                                 <Link to={`/edit-deck/${deck.id}`} className="px-4 py-2 text-center bg-primary/10 border border-primary/30 hover:bg-primary/20 rounded text-[10px] font-black uppercase tracking-widest text-primary transition-all">
                                     Edit
