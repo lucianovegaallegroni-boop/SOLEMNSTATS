@@ -25,8 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST: Create or Update a combo
     if (req.method === 'POST') {
-        console.log('Combo POST body:', req.body);
-        const { id: comboId, name, steps, probability } = req.body;
+        const body = req.body || {};
+        console.log('Combo POST body:', body);
+        const { id: comboId, name, steps, probability } = body;
 
         if (!name || !steps || probability === undefined) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -58,7 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // DELETE: Remove a combo
     if (req.method === 'DELETE') {
-        const comboId = req.body.comboId || req.query.comboId;
+        const body = req.body || {};
+        const comboId = req.query.comboId || body.comboId;
 
         if (!comboId) {
             return res.status(400).json({ error: 'Missing combo ID' });

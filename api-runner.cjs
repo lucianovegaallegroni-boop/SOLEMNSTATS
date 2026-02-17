@@ -22,7 +22,7 @@ const runHandler = async (handlerPath, req, res, extraQuery = {}) => {
         const vercelReq = {
             method: req.method,
             headers: req.headers,
-            body: req.body,
+            body: req.body || {},
             query: { ...req.query, ...extraQuery },
         };
 

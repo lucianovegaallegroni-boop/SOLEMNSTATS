@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(404).json({ error: 'Deck not found' });
         }
 
-        const { main_list = '', extra_list = '', side_list = '', name } = req.body;
+        const { main_list = '', extra_list = '', side_list = '', name } = req.body || {};
 
         if (!main_list && !extra_list && !side_list && !name) {
             // If nothing to update, just return current deck
