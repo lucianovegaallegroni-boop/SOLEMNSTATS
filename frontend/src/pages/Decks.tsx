@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
+import { ConfirmationModal } from '../components/ConfirmationModal'
 
 interface Deck {
     id: number;
@@ -13,6 +14,20 @@ interface Deck {
 function Decks() {
     const [decks, setDecks] = useState<Deck[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Modal state
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'primary' | 'danger';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+    });
 
     useEffect(() => {
         fetchDecks()
@@ -32,25 +47,31 @@ function Decks() {
     }
 
     const handleDelete = async (id: number, name: string) => {
-        if (!confirm(`¿Estás seguro de que quieres borrar el mazo "${name}"?`)) {
-            return;
-        }
+        setModalConfig({
+            isOpen: true,
+            title: 'Delete Deck',
+            message: `Are you sure you want to delete the deck "${name}"? This action cannot be undone.`,
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/deck/${id}`, {
+                        method: 'DELETE',
+                    });
 
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/deck/${id}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                // Actualizar la lista localmente
-                setDecks(decks.filter(deck => deck.id !== id));
-            } else {
-                alert("Error al borrar el mazo.");
+                    if (response.ok) {
+                        setDecks(decks.filter(deck => deck.id !== id));
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                    } else {
+                        alert("Error al borrar el mazo.");
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                    }
+                } catch (error) {
+                    console.error('Error deleting deck:', error);
+                    alert("Error de conexión al borrar el mazo.");
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }
             }
-        } catch (error) {
-            console.error('Error deleting deck:', error);
-            alert("Error de conexión al borrar el mazo.");
-        }
+        });
     }
 
     if (loading) {
@@ -119,6 +140,11 @@ function Decks() {
                     ))}
                 </div>
             )}
+
+            <ConfirmationModal
+                {...modalConfig}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+            />
         </main>
     )
 }

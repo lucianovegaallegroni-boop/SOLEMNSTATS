@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface ComboStep {
     id: string;
@@ -21,6 +22,20 @@ export function SavedCombosWidget({ deckId }: { deckId: string }) {
     const [combos, setCombos] = useState<SavedCombo[]>([]);
     const navigate = useNavigate();
 
+    // Modal state
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'primary' | 'danger';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+    });
+
     const fetchCombos = () => {
         fetch(`${API_BASE_URL}/api/deck/${deckId}/combos`)
             .then(res => res.json())
@@ -32,11 +47,22 @@ export function SavedCombosWidget({ deckId }: { deckId: string }) {
     };
 
     const deleteCombo = async (comboId: number) => {
-        if (!confirm('Delete this combo?')) return;
-        try {
-            await fetch(`${API_BASE_URL}/api/deck/${deckId}/combos?comboId=${comboId}`, { method: 'DELETE' });
-            fetchCombos();
-        } catch (e) { console.error(e); }
+        setModalConfig({
+            isOpen: true,
+            title: 'Delete Combo',
+            message: 'Are you sure you want to delete this combo?',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/api/deck/${deckId}/combos?comboId=${comboId}`, { method: 'DELETE' });
+                    fetchCombos();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                } catch (e) {
+                    console.error(e);
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
     };
 
     useEffect(() => {
@@ -104,6 +130,11 @@ export function SavedCombosWidget({ deckId }: { deckId: string }) {
                     </div>
                 ))}
             </div>
+
+            <ConfirmationModal
+                {...modalConfig}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 }

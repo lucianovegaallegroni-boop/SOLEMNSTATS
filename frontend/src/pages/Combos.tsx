@@ -1,6 +1,7 @@
-import { useParams, Link, useLocation } from 'react-router-dom';
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 interface Card {
     id: number | string;
@@ -46,6 +47,21 @@ function Combos() {
     const [savedCombos, setSavedCombos] = useState<SavedCombo[]>([]);
     const [comboName, setComboName] = useState('');
     const [editingComboId, setEditingComboId] = useState<number | null>(null);
+    const navigate = useNavigate();
+
+    // Modal state
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'primary' | 'danger';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+    });
     const [isSaving, setIsSaving] = useState(false);
 
     // DND State
@@ -343,6 +359,8 @@ function Combos() {
                 setComboName('');
                 setEditingComboId(null);
                 fetchSavedCombos();
+                // Redirect to dashboard after success
+                navigate(`/dashboard/${id}`);
             }
         } catch (e) {
             console.error(e);
@@ -352,11 +370,22 @@ function Combos() {
     };
 
     const deleteCombo = async (comboId: number) => {
-        if (!confirm('Are you sure?')) return;
-        try {
-            await fetch(`${API_BASE_URL}/api/deck/${id}/combos?comboId=${comboId}`, { method: 'DELETE' });
-            fetchSavedCombos();
-        } catch (e) { console.error(e); }
+        setModalConfig({
+            isOpen: true,
+            title: 'Delete Combo',
+            message: 'Are you sure you want to delete this combo? This action cannot be undone.',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/api/deck/${id}/combos?comboId=${comboId}`, { method: 'DELETE' });
+                    fetchSavedCombos();
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                } catch (e) {
+                    console.error(e);
+                    setModalConfig(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
     };
 
     if (loading) return <div className="text-primary p-10 font-black animate-pulse uppercase">Loading Deck...</div>;
@@ -591,6 +620,11 @@ function Combos() {
 
                 </div>
             </div>
+
+            <ConfirmationModal
+                {...modalConfig}
+                onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+            />
         </main>
     );
 }
