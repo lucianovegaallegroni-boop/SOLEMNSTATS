@@ -66,8 +66,12 @@ function Combos() {
             setEditingComboId(combo.id);
             setComboSize(combo.steps.length);
             setComboSteps(combo.steps);
-            // We don't need to manually trigger simulation here because 
-            // setComboSize/setComboSteps will trigger effects or we can do it after deck loads
+            // Pre-fill simulation result to show the results panel immediately
+            setSimulationResult({
+                probability: combo.probability,
+                successCount: 0, // Placeholder
+                totalSims: 1000000
+            });
         }
     }, [id, location.state]);
 
@@ -298,6 +302,26 @@ function Combos() {
         }, 100);
     };
 
+    const startEditing = (combo: SavedCombo) => {
+        setComboName(combo.name);
+        setEditingComboId(combo.id);
+        setComboSize(combo.steps.length);
+        setComboSteps(combo.steps);
+        setSimulationResult({
+            probability: combo.probability,
+            successCount: 0,
+            totalSims: 1000000
+        });
+        // Scroll to builder
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelEdit = () => {
+        setComboName('');
+        setEditingComboId(null);
+        setSimulationResult(null);
+    };
+
     const saveCombo = async () => {
         if (!simulationResult || !comboName.trim()) return;
         setIsSaving(true);
@@ -506,8 +530,16 @@ function Combos() {
                                                 disabled={!comboName.trim() || isSaving}
                                                 className="bg-white text-black text-xs font-black uppercase px-4 py-2 rounded hover:bg-primary hover:text-white transition-colors disabled:opacity-50"
                                             >
-                                                {isSaving ? 'Saving...' : 'Save'}
+                                                {isSaving ? 'Saving...' : (editingComboId ? 'Update' : 'Save')}
                                             </button>
+                                            {editingComboId && (
+                                                <button
+                                                    onClick={cancelEdit}
+                                                    className="bg-slate-800 text-slate-400 text-xs font-black uppercase px-4 py-2 rounded hover:bg-red-500 hover:text-white transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (
@@ -543,9 +575,14 @@ function Combos() {
                                                 <div className="text-[10px] text-slate-500">{combo.steps.length} Step Combo</div>
                                             </div>
                                         </div>
-                                        <button onClick={() => deleteCombo(combo.id)} className="text-slate-600 hover:text-red-500 transition-colors">
-                                            <span className="material-icons text-sm">delete</span>
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => startEditing(combo)} className="text-slate-600 hover:text-primary transition-colors p-1" title="Edit">
+                                                <span className="material-icons text-sm">edit</span>
+                                            </button>
+                                            <button onClick={() => deleteCombo(combo.id)} className="text-slate-600 hover:text-red-500 transition-colors p-1" title="Delete">
+                                                <span className="material-icons text-sm">delete</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
