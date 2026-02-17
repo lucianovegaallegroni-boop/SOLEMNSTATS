@@ -50,7 +50,7 @@ function Combos() {
 
     // DND State
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [isDragging, setIsDragging] = useState(false);
+    const [, setIsDragging] = useState(false);
     const dragItem = useRef<Card | null>(null);
 
     useEffect(() => {
