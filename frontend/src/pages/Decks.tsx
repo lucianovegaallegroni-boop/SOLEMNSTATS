@@ -11,7 +11,10 @@ interface Deck {
     rawList: string;
 }
 
+import { useAuth } from '../context/AuthContext'
+
 function Decks() {
+    const { user } = useAuth()
     const [decks, setDecks] = useState<Deck[]>([])
     const [loading, setLoading] = useState(true)
 
@@ -31,10 +34,14 @@ function Decks() {
 
     useEffect(() => {
         fetchDecks()
-    }, [])
+    }, [user])
 
     const fetchDecks = () => {
-        fetch(`${API_BASE_URL}/api/list-decks`)
+        const url = user
+            ? `${API_BASE_URL}/api/list-decks?user_id=${user.id}`
+            : `${API_BASE_URL}/api/list-decks`
+
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 setDecks(data)

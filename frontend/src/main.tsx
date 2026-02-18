@@ -8,6 +8,9 @@ import ComboTracker from './pages/ComboTracker'
 import Decks from './pages/Decks'
 import EditDeck from './pages/EditDeck'
 import Combos from './pages/Combos'
+import Login from './pages/Login'
+import Profile from './pages/Profile'
+import MetaReport from './pages/MetaReport'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -16,6 +19,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<App />}>
           <Route index element={<Home />} />
+          <Route path="login" element={<Login />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="meta-report" element={<MetaReport />} />
           <Route path="dashboard/:id" element={<Dashboard />} />
           <Route path="combos/:id" element={<Combos />} />
           <Route path="combo" element={<ComboTracker />} />

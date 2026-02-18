@@ -17,4 +17,5 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
 })

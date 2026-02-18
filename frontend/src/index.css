@@ -2,6 +2,8 @@
 
 @theme {
   --color-primary: #d4af37;
+  --color-blue-primary: #135bec;
+  --color-gold: #d4af37;
   --color-accent-purple: #4b0082;
   --color-background-light: #f6f6f8;
   --color-background-dark: #0a0a0f;
@@ -11,8 +13,17 @@
 }
 
 @layer utilities {
-  .neon-glow {
+
+  .neon-glow,
+  .gold-glow {
     box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+  }
+
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(25, 30, 45, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .neon-glow-purple {

@@ -2,8 +2,11 @@ import { useState, useEffect } from "react"
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
 
+import { useAuth } from '../context/AuthContext'
+
 function Home() {
     const navigate = useNavigate()
+    const { user } = useAuth()
 
     const [activeTab, setActiveTab] = useState<'MAIN' | 'EXTRA' | 'SIDE'>('MAIN')
     const [deckLists, setDeckLists] = useState({
@@ -210,7 +213,8 @@ function Home() {
                     main_list: deckLists.MAIN,
                     extra_list: deckLists.EXTRA,
                     side_list: deckLists.SIDE,
-                    name: deckName.trim() || "Mazo Importado"
+                    name: deckName.trim() || "Mazo Importado",
+                    user_id: user?.id
                 }),
             });
 

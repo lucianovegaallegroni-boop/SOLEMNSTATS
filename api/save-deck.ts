@@ -8,7 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { main_list = '', extra_list = '', side_list = '', name = 'My New Deck' } = req.body;
+    const { main_list = '', extra_list = '', side_list = '', name = 'My New Deck', user_id } = req.body;
 
     if (!main_list && !extra_list && !side_list) {
         return res.status(400).json({ error: 'No deck list provided' });
@@ -33,6 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             name,
             raw_list: main_list,
             total_cards: totalCount,
+            user_id: user_id || null, // Allow null for now if not provided, though ideally required
         })
         .select()
         .single();

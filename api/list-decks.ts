@@ -6,7 +6,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { data: decks, error } = await supabase
+    const { user_id } = req.query;
+
+    let query = supabase
         .from('decks')
         .select(`
             *,
@@ -14,6 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `)
         .order('created_at', { ascending: false })
         .order('id', { foreignTable: 'cards', ascending: true });
+
+    if (user_id) {
+        query = query.eq('user_id', user_id);
+    } else {
+        // If no user_id is provided, return only public/legacy decks (where user_id is null)
+        query = query.is('user_id', null);
+    }
+
+    const { data: decks, error } = await query;
 
     if (error) {
         return res.status(500).json({ error: error.message });

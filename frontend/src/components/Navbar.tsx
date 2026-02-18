@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 function Navbar() {
     const location = useLocation()
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const { user, signOut } = useAuth()
 
     const navLinks = [
         { to: '/', label: 'Import', icon: 'upload_file' },
         { to: '/decks', label: 'My Decks', icon: 'style' },
         { to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
-        { to: '#', label: 'Meta Data', icon: 'insights' },
+        { to: '/meta-report', label: 'Meta Report', icon: 'insights' },
         { to: '#', label: 'Card DB', icon: 'search' },
     ]
 
@@ -56,9 +58,31 @@ function Navbar() {
                             <button className="hidden sm:block p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
                                 <span className="material-icons text-xl text-slate-400">notifications</span>
                             </button>
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-primary/30 p-0.5">
-                                <img alt="User profile" className="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7EQSUFfLxwsyI2ujxKFnFxeSaFKDO88NpKD9ikuVePympeW_8Zi0CEqqZ_XFbqzQDK3kxUOAGka_Iet8_vuIw-sjpYpTCENzqPQT_O7N4p0EAp5Zr0mvR496a7IOW8Pgu9-RdHXnEAOHTXLFv1hOAxrDAinsQEfWKAgaBIYjq7D1NlJy0jtBP-Rne03nli4-4B60-BXrE72Obu0Z47j-PCc9otyoopQYMjXQGtyxGB2Yhois7_UvF_efJ5w9uFRMSGrNPQahywHc" />
-                            </div>
+
+                            {user ? (
+                                <div className="flex items-center gap-3">
+                                    <Link to="/profile" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-primary/30 p-0.5 hover:border-primary transition-colors" title={user.user_metadata?.username || user.email}>
+                                        <img
+                                            alt="User profile"
+                                            className="w-full h-full rounded-full object-cover"
+                                            src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.user_metadata?.username || user.email}&background=random`}
+                                        />
+                                    </Link>
+                                    <div className="hidden sm:flex flex-col items-start leading-none">
+                                        <Link to="/profile" className="text-xs font-bold text-white mb-0.5 hover:text-primary transition-colors">{user.user_metadata?.username || user.email?.split('@')[0]}</Link>
+                                        <button
+                                            onClick={signOut}
+                                            className="text-[10px] font-bold text-slate-500 hover:text-primary transition-colors uppercase tracking-wider"
+                                        >
+                                            Logout
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <Link to="/login" className="text-sm font-bold text-primary hover:text-white transition-colors uppercase tracking-wider">
+                                    Login
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -122,16 +146,25 @@ function Navbar() {
                 {/* Sidebar Footer */}
                 <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border-dark">
                     <div className="flex items-center gap-3 px-2">
-                        <div className="w-9 h-9 rounded-full border-2 border-primary/30 p-0.5 flex-shrink-0">
-                            <img alt="User profile" className="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7EQSUFfLxwsyI2ujxKFnFxeSaFKDO88NpKD9ikuVePympeW_8Zi0CEqqZ_XFbqzQDK3kxUOAGka_Iet8_vuIw-sjpYpTCENzqPQT_O7N4p0EAp5Zr0mvR496a7IOW8Pgu9-RdHXnEAOHTXLFv1hOAxrDAinsQEfWKAgaBIYjq7D1NlJy0jtBP-Rne03nli4-4B60-BXrE72Obu0Z47j-PCc9otyoopQYMjXQGtyxGB2Yhois7_UvF_efJ5w9uFRMSGrNPQahywHc" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-white truncate">Duelist</p>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Free Plan</p>
-                        </div>
-                        <button className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
-                            <span className="material-icons text-lg text-slate-500">notifications</span>
-                        </button>
+                        {user ? (
+                            <>
+                                <div className="w-9 h-9 rounded-full border-2 border-primary/30 p-0.5 flex-shrink-0">
+                                    <img
+                                        alt="User profile"
+                                        className="w-full h-full rounded-full object-cover"
+                                        src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.user_metadata?.username || user.email}&background=random`}
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-white truncate">{user.user_metadata?.username || user.email}</p>
+                                    <button onClick={signOut} className="text-[10px] text-slate-500 uppercase tracking-wider hover:text-white">Logout</button>
+                                </div>
+                            </>
+                        ) : (
+                            <Link to="/login" className="w-full text-center py-2 bg-primary/10 text-primary font-bold rounded hover:bg-primary/20 transition-colors uppercase text-xs">
+                                Login / Sign Up
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>
