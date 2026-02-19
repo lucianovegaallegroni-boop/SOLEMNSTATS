@@ -441,6 +441,9 @@ export default function MetaReport() {
                                                                     src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(archetypeConfigs[result.archetype][0])}.jpg`}
                                                                     className="absolute inset-0 object-cover opacity-30"
                                                                     alt=""
+                                                                    onError={(e) => {
+                                                                        (e.target as HTMLImageElement).style.display = 'none';
+                                                                    }}
                                                                 />
                                                             )}
                                                         </div>
@@ -536,9 +539,12 @@ export default function MetaReport() {
                                     {archetypeConfigs[deck.name]?.length > 0 && (
                                         <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
                                             <img
-                                                src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(archetypeConfigs[deck.name][0])}.jpg`}
+                                                src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(deck.name)}.jpg`}
                                                 className="w-full h-full object-cover"
                                                 alt=""
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
                                             />
                                         </div>
                                     )}
@@ -675,8 +681,14 @@ export default function MetaReport() {
                                                     className="w-full h-full object-cover"
                                                     alt={cardName}
                                                     onError={(e) => {
-                                                        (e.target as HTMLImageElement).src = 'https://images.ygoprodeck.com/images/cards_cropped/0.jpg'; // Placeholder or transparent
-                                                        (e.target as HTMLImageElement).classList.add('opacity-10');
+                                                        const target = e.target as HTMLImageElement;
+                                                        if (!target.dataset.error) {
+                                                            target.dataset.error = 'true';
+                                                            target.src = 'https://images.ygoprodeck.com/images/cards/back_high.jpg'; // Better placeholder
+                                                            target.classList.add('opacity-10');
+                                                        } else {
+                                                            target.style.display = 'none';
+                                                        }
                                                     }}
                                                 />
                                             </div>
