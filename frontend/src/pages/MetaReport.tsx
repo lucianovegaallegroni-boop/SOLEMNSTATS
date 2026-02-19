@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
+
 
 interface TournamentResult {
     playerName: string
@@ -17,7 +17,6 @@ interface Tournament {
 type ViewType = 'Format' | 'Tournament' | 'Month'
 
 export default function MetaReport() {
-    const { user } = useAuth()
     const [viewType, setViewType] = useState<ViewType>('Format')
     const [showModal, setShowModal] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
@@ -25,7 +24,6 @@ export default function MetaReport() {
     const [hoveredSegment, setHoveredSegment] = useState<{ name: string, percentage: number } | null>(null)
 
     const [tournaments, setTournaments] = useState<Tournament[]>([])
-    const [userDecks, setUserDecks] = useState<any[]>([])
     const [archetypeConfigs, setArchetypeConfigs] = useState<Record<string, string[]>>({})
     const [savedPlayers, setSavedPlayers] = useState<string[]>(['YusukeH', 'Dkayed', 'JoshM', 'Jesse Kotton', 'Joshua Schmidt'])
     const [savedDecks, setSavedDecks] = useState<string[]>(['Snake-Eye', 'Voiceless Voice', 'Labrynth', 'Tenpai Dragon', 'Branded Despia', 'Kashtira', 'Runick', 'Fire King'])
@@ -39,10 +37,7 @@ export default function MetaReport() {
     useEffect(() => {
         fetchTournaments()
         fetchArchetypeConfigs()
-        if (user) {
-            fetchUserDecks()
-        }
-    }, [user])
+    }, [])
 
     const fetchTournaments = async () => {
         try {
@@ -65,33 +60,6 @@ export default function MetaReport() {
             console.error('Failed to fetch tournaments:', err)
         } finally {
             setLoading(false)
-        }
-    }
-
-    const fetchUserDecks = async () => {
-        if (!user) return
-        try {
-            const res = await fetch(`/api/list-decks?user_id=${user.id}`)
-            const data = await res.json()
-            if (Array.isArray(data)) {
-                setUserDecks(data)
-
-                // Add user's deck names to savedDecks for suggestions in the form
-                const decksSet = new Set(savedDecks)
-                data.forEach(d => {
-                    if (d.name) decksSet.add(d.name)
-                })
-                setSavedDecks(Array.from(decksSet))
-
-                // Add current user to savedPlayers if they have a username
-                if (user.user_metadata?.username) {
-                    const playersSet = new Set(savedPlayers)
-                    playersSet.add(user.user_metadata.username)
-                    setSavedPlayers(Array.from(playersSet))
-                }
-            }
-        } catch (err) {
-            console.error('Failed to fetch user decks:', err)
         }
     }
 
@@ -227,20 +195,7 @@ export default function MetaReport() {
 
     const openConfigModal = (archetype: string) => {
         setActiveConfigArchetype(archetype);
-
-        // Use existing config if available
-        let existingConfig = archetypeConfigs[archetype]?.join(', ') || '';
-
-        // If no existing config, try to find a matching deck from user's decks
-        if (!existingConfig && userDecks.length > 0) {
-            const matchingDeck = userDecks.find(d => d.name.toLowerCase() === archetype.toLowerCase());
-            if (matchingDeck && matchingDeck.cards) {
-                // Suggest top 2 cards from the deck (e.g. first two listed)
-                existingConfig = matchingDeck.cards.slice(0, 2).map((c: any) => c.cardName).join(', ');
-            }
-        }
-
-        setConfigCardNames(existingConfig);
+        setConfigCardNames(archetypeConfigs[archetype]?.join(', ') || '');
         setShowConfigModal(true);
     }
 
@@ -729,13 +684,7 @@ export default function MetaReport() {
                                                     alt={cardName}
                                                     onError={(e) => {
                                                         const target = e.target as HTMLImageElement;
-                                                        if (!target.dataset.error) {
-                                                            target.dataset.error = 'true';
-                                                            target.src = 'https://images.ygoprodeck.com/images/cards/back_high.jpg'; // Better placeholder
-                                                            target.classList.add('opacity-10');
-                                                        } else {
-                                                            target.style.display = 'none';
-                                                        }
+                                                        target.style.display = 'none';
                                                     }}
                                                 />
                                             </div>
@@ -752,15 +701,7 @@ export default function MetaReport() {
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-black text-white uppercase tracking-widest">{activeConfigArchetype}</h3>
-                                    {userDecks.some(d => d.name.toLowerCase() === activeConfigArchetype.toLowerCase()) && (
-                                        <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                                            <span className="material-symbols-outlined text-[10px] text-emerald-500">check_circle</span>
-                                            <span className="text-[9px] text-emerald-500 font-black uppercase tracking-tighter">Matched with your decks</span>
-                                        </div>
-                                    )}
-                                    {!userDecks.some(d => d.name.toLowerCase() === activeConfigArchetype.toLowerCase()) && (
-                                        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">Assign signature cards to this engine</p>
-                                    )}
+                                    <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">Assign signature cards to this engine</p>
                                 </div>
                             </div>
 
