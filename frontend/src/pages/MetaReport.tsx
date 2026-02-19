@@ -666,8 +666,30 @@ export default function MetaReport() {
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="space-y-4 text-center">
-                                <div className="size-16 rounded-2xl bg-gold/10 flex items-center justify-center mx-auto border border-gold/20 shadow-inner">
-                                    <span className="material-symbols-outlined text-gold text-3xl">style</span>
+                                <div className="flex justify-center gap-4">
+                                    {configCardNames.split(',').map(s => s.trim()).filter(s => s !== '').slice(0, 2).map((cardName, idx) => (
+                                        <div key={idx} className="relative group/card">
+                                            <div className="size-20 rounded-2xl bg-slate-800 border-2 border-gold/40 overflow-hidden shadow-lg shadow-gold/10 relative">
+                                                <img
+                                                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(cardName)}.jpg`}
+                                                    className="w-full h-full object-cover"
+                                                    alt={cardName}
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src = 'https://images.ygoprodeck.com/images/cards_cropped/0.jpg'; // Placeholder or transparent
+                                                        (e.target as HTMLImageElement).classList.add('opacity-10');
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="absolute -bottom-2 -right-2 bg-gold text-background-dark size-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-lg">
+                                                {idx + 1}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {configCardNames.split(',').map(s => s.trim()).filter(s => s !== '').length === 0 && (
+                                        <div className="size-20 rounded-2xl bg-gold/5 flex items-center justify-center border-2 border-dashed border-gold/20">
+                                            <span className="material-symbols-outlined text-gold/30 text-3xl">style</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-black text-white uppercase tracking-widest">{activeConfigArchetype}</h3>
@@ -689,10 +711,11 @@ export default function MetaReport() {
 
                             <button
                                 onClick={saveArchetypeConfig}
-                                className="w-full py-4 bg-gold rounded-xl text-[10px] font-black uppercase tracking-widest text-background-dark shadow-xl shadow-gold/10 hover:bg-gold/90 transition-all"
+                                className="w-full py-4 bg-gold rounded-xl text-[10px] font-black uppercase tracking-widest text-background-dark shadow-xl shadow-gold/10 hover:bg-gold/90 transition-all active:scale-95"
                             >
                                 Save Configuration
                             </button>
+
                         </div>
                     </div>
                 </div>
