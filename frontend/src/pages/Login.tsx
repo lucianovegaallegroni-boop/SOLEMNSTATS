@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import * as CryptoJS from 'crypto-js';
 
 export default function Login() {
     const [loading, setLoading] = useState(false)
@@ -35,11 +36,33 @@ export default function Login() {
                 if (error) throw error
                 alert('Check your email for the login link!')
             } else {
-                const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
-                })
-                if (error) throw error
+                const secretKey = import.meta.env.VITE_AES_SECRET_KEY;
+                if (!secretKey) throw new Error("Encryption configuration missing");
+
+                // Encrypt payload
+                const payload = JSON.stringify({ email, password });
+                const encrypted = CryptoJS.AES.encrypt(payload, secretKey).toString();
+
+                // Call secure login endpoint
+                const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ payload: encrypted }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Login failed');
+                }
+
+                if (data.session) {
+                    const { error } = await supabase.auth.setSession(data.session);
+                    if (error) throw error;
+                }
+
                 navigate('/')
             }
         } catch (error: any) {

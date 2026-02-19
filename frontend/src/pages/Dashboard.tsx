@@ -1,12 +1,19 @@
 import { useParams } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { SavedCombosWidget } from '../components/SavedCombosWidget';
+import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../config'
 import { debounce } from 'lodash';
 
 function Dashboard() {
-    const { id } = useParams<{ id: string }>()
-    const [deck, setDeck] = useState<any>(null)
+    const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
+    const [deck, setDeck] = useState<any>(null);
+    // Explicitly check for user_id to avoid undefined issues, treat null user_id as public/read-only or whatever, 
+    // but here we want to protect against editing if not owner. 
+    // If deck.user_id is set, must match user.id. 
+    const isOwner = !!(deck?.user_id && user?.id === deck.user_id);
+
     const [loading, setLoading] = useState(true)
     const [hand, setHand] = useState<any[]>([])
     const [deckStack, setDeckStack] = useState<any[]>([])
@@ -234,6 +241,7 @@ function Dashboard() {
 
     const handleCardClick = (card: any) => {
         if (tagMode) {
+            if (!isOwner) return; // Security check
             toggleTag(card, tagMode);
         } else {
             const cardName = card.cardName || card.card_name;
@@ -320,7 +328,8 @@ function Dashboard() {
                     name: deck.name,
                     main_list: mainList,
                     extra_list: extraList,
-                    side_list: sideList
+                    side_list: sideList,
+                    user_id: user?.id // Include user_id for ownership check
                 })
             });
         } catch (e) {
@@ -328,7 +337,7 @@ function Dashboard() {
         } finally {
             setIsSaving(false);
         }
-    }, [deck, id]);
+    }, [deck, id, user]);
 
     // Keep a ref to the latest save function to avoid stale closures in debounce
     const latestSaveDeckOrder = useRef(saveDeckOrder);
@@ -573,32 +582,34 @@ function Dashboard() {
                         </a>
                     </div>
                     <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase block mt-2">Interactive Tagging Mode</span>
-                    <div className="flex overflow-x-auto bg-slate-900 p-1 rounded-lg border border-slate-800 max-w-full">
-                        {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine', 'Brick'].map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => setTagMode(tagMode === cat ? null : cat)}
-                                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-[8px] sm:text-[10px] font-black uppercase transition-all flex items-center gap-1 sm:gap-2 whitespace-nowrap ${tagMode === cat
-                                    ? `bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]`
-                                    : 'text-slate-500 hover:text-white hover:bg-white/5'
-                                    }`}
-                            >
-                                <div className={`w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full ${tagColors[cat]?.replace('border-', 'bg-') || 'bg-slate-500'}`}></div>
-                                {cat}
-                            </button>
-                        ))}
-                        {tagMode && (
-                            <button
-                                onClick={() => {
-                                    setTagMode(null);
-                                    fetchDeck();
-                                }}
-                                className="ml-1 sm:ml-2 px-2 py-1 sm:py-1.5 text-[8px] sm:text-[10px] font-black text-red-500 hover:text-red-400 uppercase border-l border-slate-700 pl-2 sm:pl-3 whitespace-nowrap"
-                            >
-                                Exit Mode
-                            </button>
-                        )}
-                    </div>
+                    {isOwner && (
+                        <div className="flex overflow-x-auto bg-slate-900 p-1 rounded-lg border border-slate-800 max-w-full">
+                            {['Starter', 'Extender', 'Handtrap', 'Board Breaker', 'Engine', 'Non-Engine', 'Brick'].map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setTagMode(tagMode === cat ? null : cat)}
+                                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-[8px] sm:text-[10px] font-black uppercase transition-all flex items-center gap-1 sm:gap-2 whitespace-nowrap ${tagMode === cat
+                                        ? `bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]`
+                                        : 'text-slate-500 hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    <div className={`w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full ${tagColors[cat]?.replace('border-', 'bg-') || 'bg-slate-500'}`}></div>
+                                    {cat}
+                                </button>
+                            ))}
+                            {tagMode && (
+                                <button
+                                    onClick={() => {
+                                        setTagMode(null);
+                                        fetchDeck();
+                                    }}
+                                    className="ml-1 sm:ml-2 px-2 py-1 sm:py-1.5 text-[8px] sm:text-[10px] font-black text-red-500 hover:text-red-400 uppercase border-l border-slate-700 pl-2 sm:pl-3 whitespace-nowrap"
+                                >
+                                    Exit Mode
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -624,9 +635,50 @@ function Dashboard() {
                                     <h3 className="text-xl font-black italic uppercase text-white">{selectedCard.cardName || selectedCard.card_name}</h3>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Assign categories for analysis</p>
                                 </div>
-                                <button onClick={() => setIsTagModalOpen(false)} className="text-slate-500 hover:text-white transition-colors">
-                                    <span className="material-icons">close</span>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {isOwner && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const newCover = selectedCard.imageUrl || selectedCard.image_url;
+                                                // Optimistic update
+                                                const originalCover = deck?.coverImageUrl;
+                                                setDeck((prev: any) => ({ ...prev, coverImageUrl: newCover }));
+
+                                                fetch(`${API_BASE_URL}/api/deck/${id}`, {
+                                                    method: 'PUT',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        user_id: user?.id,
+                                                        cover_image_url: newCover
+                                                    })
+                                                }).then(async res => {
+                                                    if (!res.ok) {
+                                                        const errorData = await res.json().catch(() => ({}));
+                                                        // Revert on failure
+                                                        setDeck((prev: any) => ({ ...prev, coverImageUrl: originalCover }));
+                                                        alert(`Error updating cover: ${errorData.details || errorData.error || 'Unknown error'}`);
+                                                    }
+                                                    // Success feedback is the filled star
+                                                }).catch(() => {
+                                                    setDeck((prev: any) => ({ ...prev, coverImageUrl: originalCover }));
+                                                });
+                                            }}
+                                            className={`transition-colors ${(deck?.coverImageUrl === (selectedCard.imageUrl || selectedCard.image_url))
+                                                ? 'text-yellow-400'
+                                                : 'text-slate-600 hover:text-yellow-400'
+                                                }`}
+                                            title="Set as Deck Cover"
+                                        >
+                                            <span className="material-icons">
+                                                {(deck?.coverImageUrl === (selectedCard.imageUrl || selectedCard.image_url)) ? 'star' : 'star_border'}
+                                            </span>
+                                        </button>
+                                    )}
+                                    <button onClick={() => setIsTagModalOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                                        <span className="material-icons">close</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-col md:flex-row gap-6 mb-8">
@@ -704,19 +756,21 @@ function Dashboard() {
                 <div className="ygo-card-border rounded p-4 sm:p-6 shadow-2xl flex flex-col flex-1 min-w-0 w-full sm:min-w-[300px]">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary">Duel Simulation (Main Deck)</h3>
-                        <button
-                            onClick={() => {
-                                if (tagMode) {
-                                    setTagMode(null);
-                                    fetchDeck();
-                                } else {
-                                    setTagMode('Starter');
-                                }
-                            }}
-                            className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${tagMode ? 'bg-primary text-background-dark border-primary' : 'text-slate-500 border-slate-700 hover:text-white hover:border-white'}`}
-                        >
-                            {tagMode ? 'Done Editing' : 'Edit Tags'}
-                        </button>
+                        {isOwner && (
+                            <button
+                                onClick={() => {
+                                    if (tagMode) {
+                                        setTagMode(null);
+                                        fetchDeck();
+                                    } else {
+                                        setTagMode('Starter');
+                                    }
+                                }}
+                                className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${tagMode ? 'bg-primary text-background-dark border-primary' : 'text-slate-500 border-slate-700 hover:text-white hover:border-white'}`}
+                            >
+                                {tagMode ? 'Done Editing' : 'Edit Tags'}
+                            </button>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                         {[

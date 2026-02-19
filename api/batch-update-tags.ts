@@ -6,10 +6,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { deckId, cardName, tags } = req.body;
+    const { deckId, cardName, tags, userId } = req.body;
 
     if (!deckId || !cardName || !Array.isArray(tags)) {
         return res.status(400).json({ error: 'Invalid request body. Required: deckId, cardName, tags[]' });
+    }
+
+    // Security Check
+    const { data: deckData, error: deckError } = await supabaseClient
+        .from('decks')
+        .select('user_id')
+        .eq('id', deckId)
+        .single();
+
+    if (deckError || !deckData) {
+        return res.status(404).json({ error: 'Deck not found' });
+    }
+
+    if (deckData.user_id && deckData.user_id !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to edit this deck.' });
     }
 
     // 1. Find all cards in this deck with this name

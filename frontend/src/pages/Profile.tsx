@@ -7,6 +7,8 @@ export default function Profile() {
     const { user } = useAuth()
     const [loading, setLoading] = useState(false)
     const [username, setUsername] = useState(user?.user_metadata?.username || '')
+    const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '')
+    const [phoneNumber, setPhoneNumber] = useState(user?.user_metadata?.phone_number || '')
     const [rank, setRank] = useState(user?.user_metadata?.rank || 'Legendary Duelist')
     const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || '')
     const [stats, setStats] = useState({ decks: 0, combos: 0 })
@@ -43,14 +45,11 @@ export default function Profile() {
 
     const fetchStats = async () => {
         try {
-            // Fetch deck count
             const deckRes = await fetch(`${API_BASE_URL}/api/list-decks?user_id=${user?.id}`)
             const deckData = await deckRes.json()
-
-            // We don't have a direct combo count API yet, so we'll mock or estimate
             setStats({
-                decks: deckData.length || 0,
-                combos: 0 // Placeholder
+                decks: Array.isArray(deckData) ? deckData.length : 0,
+                combos: 0
             })
         } catch (err) {
             console.error('Error fetching profile stats:', err)
@@ -63,18 +62,36 @@ export default function Profile() {
         setMessage('')
 
         try {
-            const { error } = await supabase.auth.updateUser({
+            // 1. Update Supabase Auth User Metadata
+            const { error: authError } = await supabase.auth.updateUser({
                 data: {
-                    username: username,
-                    rank: rank,
+                    username,
+                    full_name: fullName,
+                    phone_number: phoneNumber,
+                    rank,
                     avatar_url: avatarUrl
                 }
             })
+            if (authError) throw authError
 
-            if (error) throw error
+            // 2. Upsert into public.profiles table
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert({
+                    id: user?.id,
+                    username,
+                    full_name: fullName,
+                    phone_number: phoneNumber,
+                    avatar_url: avatarUrl,
+                    updated_at: new Date().toISOString()
+                })
+
+            if (profileError) throw profileError
+
             setMessage('Profile updated successfully!')
             setTimeout(() => setMessage(''), 3000)
         } catch (error: any) {
+            console.error('Update profile error:', error)
             alert(error.message)
         } finally {
             setLoading(false)
@@ -82,21 +99,29 @@ export default function Profile() {
     }
 
     const selectCardAsAvatar = async (card: any) => {
-        // YGOPRODeck cropped image URL: https://images.ygoprodeck.com/images/cards_cropped/{id}.jpg
         const croppedUrl = `https://images.ygoprodeck.com/images/cards_cropped/${card.id}.jpg`
         setAvatarUrl(croppedUrl)
         setShowSearch(false)
         setSearchQuery('')
         setSearchResults([])
-        // We update metadata immediately for better UX
+
         try {
             await supabase.auth.updateUser({
                 data: {
-                    username: username,
-                    rank: rank,
+                    username,
+                    full_name: fullName,
+                    phone_number: phoneNumber,
+                    rank,
                     avatar_url: croppedUrl
                 }
             })
+
+            await supabase.from('profiles').upsert({
+                id: user?.id,
+                avatar_url: croppedUrl,
+                updated_at: new Date().toISOString()
+            })
+
             setMessage('Avatar updated!')
             setTimeout(() => setMessage(''), 3000)
         } catch (e) {
@@ -109,12 +134,10 @@ export default function Profile() {
     return (
         <main className="max-w-4xl mx-auto px-6 py-12">
             <div className="relative mb-8">
-                {/* Profile Header Card */}
                 <div className="ygo-card-border p-8 rounded-2xl bg-card-dark/50 overflow-hidden relative border border-border-dark">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[80px] -z-10 rounded-full translate-x-1/2 -translate-y-1/2"></div>
 
                     <div className="flex flex-col md:flex-row items-center gap-8">
-                        {/* Avatar Section */}
                         <div className="relative group cursor-pointer" onClick={() => setShowSearch(true)}>
                             <div className="w-32 h-32 rounded-full border-4 border-primary p-1 bg-background-dark shadow-2xl shadow-primary/20 overflow-hidden">
                                 <img
@@ -131,10 +154,9 @@ export default function Profile() {
                             </div>
                         </div>
 
-                        {/* User Info */}
                         <div className="flex-1 text-center md:text-left">
                             <h1 className="text-4xl font-black text-white uppercase italic tracking-tight mb-2">
-                                {username || 'Unknown Duelist'}
+                                {fullName || username || 'Unknown Duelist'}
                             </h1>
                             <p className="text-primary font-bold uppercase tracking-[0.3em] text-[10px] mb-4">Rank: {rank}</p>
 
@@ -152,7 +174,6 @@ export default function Profile() {
                     </div>
                 </div>
 
-                {/* Stats Grid - Fixed positioning to avoid overlap */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 px-2">
                     <div className="bg-card-dark p-4 rounded-xl border border-border-dark shadow-xl hover:border-primary/30 transition-all text-center group">
                         <p className="text-2xl font-black text-primary mb-1 group-hover:scale-110 transition-transform">{stats.decks}</p>
@@ -173,7 +194,6 @@ export default function Profile() {
                 </div>
             </div>
 
-            {/* Edit Form */}
             <div className="bg-card-dark border border-border-dark rounded-2xl overflow-hidden mt-8">
                 <div className="p-8 border-b border-border-dark">
                     <h3 className="text-xl font-bold text-white uppercase italic flex items-center gap-2">
@@ -192,6 +212,26 @@ export default function Profile() {
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
                                 placeholder="AncientDuelist"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase text-slate-500 tracking-widest">Full Name</label>
+                            <input
+                                type="text"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                placeholder="Seto Kaiba"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase text-slate-500 tracking-widest">Phone / WhatsApp</label>
+                            <input
+                                type="text"
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                placeholder="+1 234 567 890"
                             />
                         </div>
                         <div className="space-y-2">
@@ -230,7 +270,6 @@ export default function Profile() {
                 </form>
             </div>
 
-            {/* Card Search Modal for Avatar */}
             {showSearch && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6" onClick={() => setShowSearch(false)}>
                     <div className="bg-card-dark border border-border-dark rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
@@ -283,16 +322,9 @@ export default function Profile() {
                                 )}
                             </div>
                         </div>
-                        <div className="p-4 bg-black/40 text-center border-t border-border-dark">
-                            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Powered by Scryfall Card Database</p>
-                        </div>
                     </div>
                 </div>
             )}
-
-            <div className="mt-8 text-center pb-12">
-                <p className="text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">SolemnStats Elite Membership v1.0</p>
-            </div>
         </main>
     )
 }

@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const fuzzy = await findBestMatch(cardData.name);
             if (fuzzy) {
                 meta = {
+                    id: fuzzy.id,
                     type: fuzzy.type,
                     image_url: fuzzy.image_url,
                     attribute: fuzzy.attribute,

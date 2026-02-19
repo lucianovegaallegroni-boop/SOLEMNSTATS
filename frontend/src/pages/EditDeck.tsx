@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
+import { useAuth } from '../context/AuthContext'
 
 function EditDeck() {
     const { id } = useParams()
@@ -15,6 +16,7 @@ function EditDeck() {
     const [cardMetadata, setCardMetadata] = useState<Record<string, string>>({})
     const [selectedCard, setSelectedCard] = useState<any>(null)
     const [cardDetailsCache, setCardDetailsCache] = useState<Record<string, any>>({})
+
 
     // Fetch and Autocomplete (same as before)
     useEffect(() => {
@@ -162,6 +164,8 @@ function EditDeck() {
         setDeckLists(prev => ({ ...prev, [area]: lines.join('\n') }));
     };
 
+    const { user } = useAuth(); // Get user from context
+
     const handleSave = async () => {
         if (!deckLists.MAIN.trim() && !deckLists.EXTRA.trim() && !deckLists.SIDE.trim()) {
             alert("El mazo no puede estar vacío.");
@@ -187,7 +191,8 @@ function EditDeck() {
                     name: deckName.trim() || "Mazo Editado",
                     main_list: deckLists.MAIN,
                     extra_list: deckLists.EXTRA,
-                    side_list: deckLists.SIDE
+                    side_list: deckLists.SIDE,
+                    user_id: user?.id // Include user_id
                 }),
             });
             if (response.ok) {

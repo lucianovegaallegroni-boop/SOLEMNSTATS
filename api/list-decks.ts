@@ -41,6 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...deck,
         createdAt: deck.created_at,
         totalCards: deck.total_cards,
+        coverImageUrl: deck.cover_image_url,
         rawList: deck.raw_list,
         cards: deck.cards.map((c: any) => ({
             ...c,

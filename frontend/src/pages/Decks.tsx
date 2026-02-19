@@ -8,7 +8,9 @@ interface Deck {
     name: string;
     createdAt: string;
     totalCards: number;
+    coverImageUrl?: string;
     rawList: string;
+    cards: any[];
 }
 
 import { useAuth } from '../context/AuthContext'
@@ -113,38 +115,90 @@ function Decks() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {decks.map((deck) => (
-                        <div key={deck.id} className="ygo-card-border p-6 rounded-xl hover:scale-[1.02] transition-all group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-primary/10 rounded-lg">
-                                    <span className="material-icons text-primary">layers</span>
+                    {decks.map((deck) => {
+                        // Helper to get cropped artwork version
+                        const getCroppedImage = (url: string | undefined) => {
+                            if (!url) return 'https://images.ygoprodeck.com/images/cards/back_high.jpg';
+                            // If it's a default backing, don't crop
+                            if (url.includes('back_high')) return url;
+                            // Replace /cards/ with /cards_cropped/ for artwork only
+                            return url.replace('/cards/', '/cards_cropped/').replace('/cards_small/', '/cards_cropped/');
+                        };
+
+                        const coverCard = (deck.cards || []).find((c: any) => c.imageUrl) ||
+                            (deck.cards || [])[0];
+                        const rawCoverImage = deck.coverImageUrl || coverCard?.imageUrl;
+                        const coverImage = getCroppedImage(rawCoverImage);
+
+                        return (
+                            <div key={deck.id} className="ygo-card-border p-0 rounded-xl hover:scale-[1.02] transition-all group overflow-hidden flex flex-col bg-card-dark relative">
+                                {/* Deck Cover Image Background with Gradient */}
+                                <div className="absolute inset-0 z-0">
+                                    <img
+                                        src={coverImage}
+                                        alt="Deck Cover"
+                                        className="w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity blur-[2px]"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-card-dark via-card-dark/80 to-transparent"></div>
                                 </div>
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
-                                    {new Date(deck.createdAt).toLocaleDateString()}
-                                </span>
-                            </div>
 
-                            <h3 className="text-xl font-black text-white uppercase italic mb-1 truncate">{deck.name}</h3>
-                            <p className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
-                                {deck.totalCards} Cards Total
-                            </p>
+                                <div className="relative z-10 p-6 flex-1 flex flex-col">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex gap-3 items-center">
+                                            {/* Small circular avatar of the Ace Card */}
+                                            <div className="w-10 h-10 rounded-full border border-primary/30 overflow-hidden shadow-lg bg-black">
+                                                <img src={coverImage} alt="Ace" className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">
+                                                    {new Date(deck.createdAt).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                            <div className="flex items-center gap-2 pt-4 border-t border-slate-800">
-                                <Link to={`/dashboard/${deck.id}`} className="flex-1 py-2 text-center bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-black uppercase tracking-widest transition-all">
-                                    View
-                                </Link>
-                                <Link to={`/edit-deck/${deck.id}`} className="px-4 py-2 text-center bg-primary/10 border border-primary/30 hover:bg-primary/20 rounded text-[10px] font-black uppercase tracking-widest text-primary transition-all">
-                                    Edit
-                                </Link>
-                                <button
-                                    className="p-2 text-slate-500 hover:text-red-500 transition-colors"
-                                    onClick={() => handleDelete(deck.id, deck.name)}
-                                >
-                                    <span className="material-icons text-sm">delete</span>
-                                </button>
+                                    <h3 className="text-xl font-black text-white uppercase italic mb-1 truncate shadow-black drop-shadow-md">{deck.name}</h3>
+                                    <p className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
+                                        {deck.totalCards} Cards Total
+                                    </p>
+
+                                    <div className="mt-auto flex items-center gap-2 pt-4 border-t border-white/10">
+                                        <Link to={`/dashboard/${deck.id}`} className="flex-1 py-2 bg-primary text-background-dark hover:bg-[#c19a2e] rounded flex items-center justify-center transition-all shadow-lg shadow-primary/10" title="View Deck">
+                                            <span className="material-icons">visibility</span>
+                                        </Link>
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(`${window.location.origin}/dashboard/${deck.id}`);
+                                                // Could add a toast here, but for now a simple alert or just action is fine. 
+                                                // Ideally use a toast state.
+                                                const btn = document.getElementById(`share-btn-${deck.id}`);
+                                                if (btn) {
+                                                    const originalText = btn.innerHTML;
+                                                    btn.innerHTML = '<span class="material-icons text-sm">check</span>';
+                                                    setTimeout(() => btn.innerHTML = originalText, 2000);
+                                                }
+                                            }}
+                                            id={`share-btn-${deck.id}`}
+                                            className="px-3 py-2 text-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-all border border-slate-700"
+                                            title="Share Deck Link"
+                                        >
+                                            <span className="material-icons text-sm">share</span>
+                                        </button>
+                                        <Link to={`/edit-deck/${deck.id}`} className="px-3 py-2 text-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-all border border-slate-700" title="Edit Deck">
+                                            <span className="material-icons text-sm">edit</span>
+                                        </Link>
+                                        <button
+                                            className="px-3 py-2 text-center bg-slate-800 hover:bg-red-900/50 hover:text-red-400 rounded text-slate-400 transition-all border border-slate-700"
+                                            onClick={() => handleDelete(deck.id, deck.name)}
+                                            title="Delete Deck"
+                                        >
+                                            <span className="material-icons text-sm">delete</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

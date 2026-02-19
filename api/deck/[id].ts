@@ -15,6 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...deck,
         createdAt: deck.created_at,
         totalCards: deck.total_cards,
+        coverImageUrl: deck.cover_image_url,
         rawList: deck.raw_list,
         cards: deck.cards ? deck.cards.map((c: any) => ({
             ...c,
@@ -47,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Check if deck exists
         const { data: existingDeck, error: fetchError } = await supabase
             .from('decks')
-            .select('id, name')
+            .select('id, name, user_id')
             .eq('id', id)
             .single();
 
@@ -55,22 +56,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(404).json({ error: 'Deck not found' });
         }
 
-        const { main_list = '', extra_list = '', side_list = '', name } = req.body || {};
+        const { main_list = '', extra_list = '', side_list = '', name, user_id, cover_image_url } = req.body || {};
 
-        if (!main_list && !extra_list && !side_list && !name) {
+        // Security Check: If the deck belongs to a user, ensuring the requester is that user
+        if (existingDeck.user_id && existingDeck.user_id !== user_id) {
+            return res.status(403).json({ error: 'You do not have permission to edit this deck.' });
+        }
+
+        if (!main_list && !extra_list && !side_list && !name && !cover_image_url) {
             // If nothing to update, just return current deck
             // But usually PUT requires full resource or at least some body.
             // If body is empty, we might error or just return.
             // Assuming parsed lists are required if provided.
         }
 
-        const allCards = [
-            ...parseDeckList(main_list, 'MAIN'),
-            ...parseDeckList(extra_list, 'EXTRA'),
-            ...parseDeckList(side_list, 'SIDE'),
-        ];
+        let totalCount = 0;
+        let allCards: any[] = [];
 
-        const totalCount = allCards.reduce((acc, c) => acc + c.quantity, 0);
+        // Only re-parse if lists are provided
+        if (main_list || extra_list || side_list) {
+            allCards = [
+                ...parseDeckList(main_list || '', 'MAIN'),
+                ...parseDeckList(extra_list || '', 'EXTRA'),
+                ...parseDeckList(side_list || '', 'SIDE'),
+            ];
+            totalCount = allCards.reduce((acc, c) => acc + c.quantity, 0);
+        }
 
         // Fetch metadata if lists changed
         let metadata: any = {};
@@ -80,17 +91,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // Update deck info
+        const updatePayload: any = {
+            name: name || existingDeck.name,
+        };
+
+        if (main_list || extra_list || side_list) {
+            updatePayload.raw_list = main_list; // This logic might be slightly flawed if only extra/side provided, but assuming main is primary. 
+            // Ideally we should store all 3 raw lists or composite them. 
+            // Current DB likely just has one 'raw_list' text field? 
+            // Checked `api/save-deck.ts` -> it saves `currRawList` which seems to be just main list or concatenated?
+            // `api/save-deck.ts` line 84: `raw_list: mainListStr` -> seemingly only main list is saved as raw_list.
+            // So we'll keep that behavior for now.
+            if (main_list) updatePayload.raw_list = main_list;
+        }
+
+        if (totalCount > 0) {
+            updatePayload.total_cards = totalCount;
+        }
+
+        if (cover_image_url) {
+            updatePayload.cover_image_url = cover_image_url;
+        }
+
         const { error: updateError } = await supabase
             .from('decks')
-            .update({
-                name: name || existingDeck.name,
-                raw_list: main_list || undefined,
-                total_cards: totalCount > 0 ? totalCount : undefined, // Only update if re-parsed
-            })
+            .update(updatePayload)
             .eq('id', id);
 
         if (updateError) {
-            return res.status(500).json({ error: 'Failed to update deck info' });
+            console.error('Update deck error:', updateError);
+            // Debug logging to file
+            const fs = require('fs');
+            fs.appendFileSync('debug.log', JSON.stringify({
+                timestamp: new Date().toISOString(),
+                payload: updatePayload,
+                error: updateError
+            }, null, 2) + '\n');
+
+            return res.status(500).json({
+                error: 'Failed to update deck info',
+                details: JSON.stringify(updateError)
+            });
         }
 
         // If lists were provided, rebuild cards

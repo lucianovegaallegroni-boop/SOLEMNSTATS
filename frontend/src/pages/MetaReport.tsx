@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
 
 
 interface TournamentResult {
@@ -106,6 +107,9 @@ const shadowPlaceholder = (e: React.SyntheticEvent<HTMLImageElement, Event>, nam
 };
 
 export default function MetaReport() {
+    const { user } = useAuth()
+    const isAuthorized = user?.user_metadata?.username === 'SerSupremo' || user?.user_metadata?.role === 'admin' || user?.app_metadata?.role === 'admin';
+
     const [viewType, setViewType] = useState<ViewType>('Format')
     const [showModal, setShowModal] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
@@ -297,14 +301,39 @@ export default function MetaReport() {
 
         const colors = ['bg-blue-primary', 'bg-gold', 'bg-slate-400', 'bg-emerald-500', 'bg-rose-500', 'bg-purple-500', 'bg-indigo-400'];
 
-        return Object.entries(archetypeCounts)
-            .map(([name, count], idx) => ({
+        const sortedDecks = Object.entries(archetypeCounts)
+            .map(([name, count]) => ({
                 name,
                 count,
-                percentage: (count / totalResults) * 100,
-                color: colors[idx % colors.length]
+                percentage: (count / totalResults) * 100
             }))
             .sort((a, b) => b.count - a.count);
+
+        if (sortedDecks.length <= 5) {
+            return sortedDecks.map((deck, idx) => ({
+                ...deck,
+                color: colors[idx % colors.length]
+            }));
+        }
+
+        const top5 = sortedDecks.slice(0, 5).map((deck, idx) => ({
+            ...deck,
+            color: colors[idx % colors.length]
+        }));
+
+        const others = sortedDecks.slice(5);
+        const otherCount = others.reduce((acc, curr) => acc + curr.count, 0);
+        const otherPercentage = (otherCount / totalResults) * 100;
+
+        return [
+            ...top5,
+            {
+                name: 'Other',
+                count: otherCount,
+                percentage: otherPercentage,
+                color: 'bg-slate-600'
+            }
+        ];
     }, [filteredTournaments]);
 
     // Dynamic Top Rankers logic
@@ -417,17 +446,19 @@ export default function MetaReport() {
                         Meta <span className="text-blue-primary">Intelligence</span>
                     </h1>
                     <p className="text-slate-400 font-medium max-w-lg">
-                        Advanced analytics for the current TCG/OCG format. Filter by event or time period.
+                        Advanced analytics for the current TCG format. Filter by event or time period.
                     </p>
                 </div>
 
-                <button
-                    onClick={() => { setIsEditing(false); setNewTournament(initialNewTournament); setShowModal(true); }}
-                    className="bg-blue-primary hover:bg-blue-primary/90 text-white px-5 py-3 rounded-lg text-sm font-black uppercase italic tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-primary/20 transform hover:-translate-y-1"
-                >
-                    <span className="material-symbols-outlined text-sm">add_circle</span>
-                    Submit Tournament
-                </button>
+                {isAuthorized && (
+                    <button
+                        onClick={() => { setIsEditing(false); setNewTournament(initialNewTournament); setShowModal(true); }}
+                        className="bg-blue-primary hover:bg-blue-primary/90 text-white px-5 py-3 rounded-lg text-sm font-black uppercase italic tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-blue-primary/20 transform hover:-translate-y-1"
+                    >
+                        <span className="material-symbols-outlined text-sm">add_circle</span>
+                        Submit Tournament
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -447,7 +478,11 @@ export default function MetaReport() {
                                             onChange={(e) => setSelectedTournamentId(e.target.value)}
                                             className="bg-slate-800/80 border border-white/10 rounded-md px-2 py-1 text-[10px] font-black text-blue-primary uppercase outline-none"
                                         >
-                                            {tournaments.map(t => <option key={t.id} value={t.id} className="bg-slate-900">{t.name}</option>)}
+                                            {tournaments.map(t => (
+                                                <option key={t.id} value={t.id} className="bg-slate-900">
+                                                    {t.name} • {new Date(t.date).toLocaleDateString()}
+                                                </option>
+                                            ))}
                                         </select>
                                     )}
                                     {viewType === 'Month' && (
@@ -542,8 +577,8 @@ export default function MetaReport() {
                                                 <ArchetypeAvatar
                                                     names={archetypeConfigs[item.name] || []}
                                                     metadata={cardMetadata}
-                                                    size="size-5"
-                                                    className={`border-2 ${item.color.replace('bg-', 'border-')}`}
+                                                    size="size-12"
+                                                    className={`border-2 shaow-lg ${item.color.replace('bg-', 'border-')}`}
                                                 />
                                                 <span className="text-xs font-bold text-slate-200">{item.name}</span>
                                                 <button
@@ -631,20 +666,24 @@ export default function MetaReport() {
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handleEditClick(tournament)}
-                                                            className="text-slate-400 hover:text-blue-primary transition-all p-1.5 hover:bg-blue-primary/10 rounded-lg"
-                                                            title="Edit Tournament"
-                                                        >
-                                                            <span className="material-symbols-outlined text-sm">edit</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => deleteTournament(tournament.id)}
-                                                            className="text-slate-400 hover:text-rose-500 transition-all p-1.5 hover:bg-rose-500/10 rounded-lg"
-                                                            title="Delete Tournament"
-                                                        >
-                                                            <span className="material-symbols-outlined text-sm">auto_delete</span>
-                                                        </button>
+                                                        {isAuthorized && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEditClick(tournament)}
+                                                                    className="text-slate-400 hover:text-blue-primary transition-all p-1.5 hover:bg-blue-primary/10 rounded-lg"
+                                                                    title="Edit Tournament"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => deleteTournament(tournament.id)}
+                                                                    className="text-slate-400 hover:text-rose-500 transition-all p-1.5 hover:bg-rose-500/10 rounded-lg"
+                                                                    title="Delete Tournament"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-sm">auto_delete</span>
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -705,7 +744,7 @@ export default function MetaReport() {
                             <span className="text-[10px] text-emerald-500 font-black">+ Dynamic Data</span>
                         </div>
                         <div className="space-y-3">
-                            {chartData.slice(0, 5).map(deck => (
+                            {chartData.map(deck => (
                                 <div key={deck.name} className="flex items-center justify-between p-3 rounded-lg border border-white/5 hover:bg-blue-primary/5 transition-colors group relative overflow-hidden">
                                     <div className="absolute inset-0 opacity-10 group-hover:opacity-25 transition-all duration-500">
                                         <ArchetypeAvatar

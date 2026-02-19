@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-02-19T15:32:26.843Z",
+  "payload": {
+    "name": "Mazo Editado",
+    "cover_image_url": "https://images.ygoprodeck.com/images/cards/15693423.jpg"
+  },
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'cover_image_url' column of 'decks' in the schema cache"
+  }
+}
+{
+  "timestamp": "2026-02-19T15:34:47.953Z",
+  "payload": {
+    "name": "Mazo Editado",
+    "cover_image_url": "https://images.ygoprodeck.com/images/cards/15693423.jpg"
+  },
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'cover_image_url' column of 'decks' in the schema cache"
+  }
+}
+{
+  "timestamp": "2026-02-19T15:44:11.576Z",
+  "payload": {
+    "name": "Mazo Editado",
+    "cover_image_url": "https://images.ygoprodeck.com/images/cards/15693423.jpg"
+  },
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'cover_image_url' column of 'decks' in the schema cache"
+  }
+}
+{
+  "timestamp": "2026-02-19T15:44:20.852Z",
+  "payload": {
+    "name": "Mazo Editado",
+    "cover_image_url": "https://images.ygoprodeck.com/images/cards/15693423.jpg"
+  },
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'cover_image_url' column of 'decks' in the schema cache"
+  }
+}
+{
+  "timestamp": "2026-02-19T15:54:47.320Z",
+  "payload": {
+    "name": "Mazo Editado",
+    "cover_image_url": "https://images.ygoprodeck.com/images/cards/15693423.jpg"
+  },
+  "error": {
+    "code": "PGRST204",
+    "details": null,
+    "hint": null,
+    "message": "Could not find the 'cover_image_url' column of 'decks' in the schema cache"
+  }
+}

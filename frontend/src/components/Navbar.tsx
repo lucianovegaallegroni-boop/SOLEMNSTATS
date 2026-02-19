@@ -12,6 +12,7 @@ function Navbar() {
         { to: '/decks', label: 'My Decks', icon: 'style' },
         { to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
         { to: '/meta-report', label: 'Meta Report', icon: 'insights' },
+        { to: '/market', label: 'Market', icon: 'storefront' },
         { to: '#', label: 'Card DB', icon: 'search' },
     ]
 
@@ -20,7 +21,7 @@ function Navbar() {
 
     return (
         <>
-            <nav className="border-b border-slate-200 dark:border-border-dark bg-white/50 dark:bg-background-dark/50 backdrop-blur-md sticky top-0 z-50">
+            <nav className="border-b border-white/5 bg-background-dark/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm shadow-black/20">
                 <div className="max-w-[1600px] mx-auto px-3 sm:px-6">
                     <div className="flex justify-between h-14 sm:h-16 items-center">
                         <div className="flex items-center gap-3 sm:gap-4">

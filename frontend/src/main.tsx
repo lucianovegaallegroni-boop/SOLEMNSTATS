@@ -11,6 +11,7 @@ import Combos from './pages/Combos'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import MetaReport from './pages/MetaReport'
+import Market from './pages/Market'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="login" element={<Login />} />
           <Route path="profile" element={<Profile />} />
           <Route path="meta-report" element={<MetaReport />} />
+          <Route path="market" element={<Market />} />
           <Route path="dashboard/:id" element={<Dashboard />} />
           <Route path="combos/:id" element={<Combos />} />
           <Route path="combo" element={<ComboTracker />} />
