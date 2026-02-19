@@ -20,24 +20,30 @@ export default function MetaReport() {
     const [showModal, setShowModal] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(true)
+    const [hoveredSegment, setHoveredSegment] = useState<{ name: string, percentage: number } | null>(null)
 
     const [tournaments, setTournaments] = useState<Tournament[]>([])
+    const [archetypeConfigs, setArchetypeConfigs] = useState<Record<string, string[]>>({})
     const [savedPlayers, setSavedPlayers] = useState<string[]>(['YusukeH', 'Dkayed', 'JoshM', 'Jesse Kotton', 'Joshua Schmidt'])
     const [savedDecks, setSavedDecks] = useState<string[]>(['Snake-Eye', 'Voiceless Voice', 'Labrynth', 'Tenpai Dragon', 'Branded Despia', 'Kashtira', 'Runick', 'Fire King'])
+
+    // Config Modal State
+    const [showConfigModal, setShowConfigModal] = useState(false)
+    const [activeConfigArchetype, setActiveConfigArchetype] = useState<string>('')
+    const [configCardNames, setConfigCardNames] = useState<string>('')
 
     // Fetch data on mount
     useEffect(() => {
         fetchTournaments()
+        fetchArchetypeConfigs()
     }, [])
 
     const fetchTournaments = async () => {
-        setLoading(true)
         try {
             const res = await fetch('/api/list-tournaments')
             const data = await res.json()
             if (Array.isArray(data)) {
                 setTournaments(data)
-                // Extract unique players and decks to seed suggestions
                 const players = new Set(savedPlayers);
                 const decks = new Set(savedDecks);
                 data.forEach((t: Tournament) => {
@@ -53,6 +59,22 @@ export default function MetaReport() {
             console.error('Failed to fetch tournaments:', err)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const fetchArchetypeConfigs = async () => {
+        try {
+            const res = await fetch('/api/list-archetype-configs')
+            const data = await res.json()
+            if (Array.isArray(data)) {
+                const configMap: Record<string, string[]> = {}
+                data.forEach((c: any) => {
+                    configMap[c.name] = c.card_names
+                })
+                setArchetypeConfigs(configMap)
+            }
+        } catch (err) {
+            console.error('Failed to fetch configs:', err)
         }
     }
 
@@ -93,7 +115,7 @@ export default function MetaReport() {
         return tournaments;
     }, [tournaments, viewType, selectedTournamentId, selectedMonth]);
 
-    // Dynamic Chart Logic & Meta Trends
+    // Dynamic Chart Logic
     const chartData = useMemo(() => {
         const archetypeCounts: Record<string, number> = {};
         let totalResults = 0;
@@ -124,11 +146,9 @@ export default function MetaReport() {
     // Dynamic Top Rankers logic
     const topRankers = useMemo(() => {
         const playerTops: Record<string, number> = {};
-
         filteredTournaments.forEach(t => {
             t.results.forEach(r => {
                 if (r.playerName) {
-                    // Increment "Tops" count for each result in the filtered subset
                     playerTops[r.playerName] = (playerTops[r.playerName] || 0) + 1;
                 }
             });
@@ -140,7 +160,7 @@ export default function MetaReport() {
             .slice(0, 3);
     }, [filteredTournaments]);
 
-    const totalPeakPercentage = chartData.length > 0 ? chartData[0].percentage.toFixed(0) : '0';
+    const displayData = hoveredSegment || (chartData.length > 0 ? { name: chartData[0].name, percentage: chartData[0].percentage } : null);
 
     const addPlayerRow = () => {
         const currentCount = newTournament.results.length;
@@ -165,11 +185,33 @@ export default function MetaReport() {
     const handleEditClick = (tournament: Tournament) => {
         setNewTournament({
             ...tournament,
-            // Date in input needs to be YYYY-MM-DD
             date: new Date(tournament.date).toISOString().split('T')[0]
         });
         setIsEditing(true);
         setShowModal(true);
+    }
+
+    const openConfigModal = (archetype: string) => {
+        setActiveConfigArchetype(archetype);
+        setConfigCardNames(archetypeConfigs[archetype]?.join(', ') || '');
+        setShowConfigModal(true);
+    }
+
+    const saveArchetypeConfig = async () => {
+        const cardNames = configCardNames.split(',').map(s => s.trim()).filter(s => s !== '').slice(0, 2);
+        try {
+            const res = await fetch('/api/save-archetype-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: activeConfigArchetype, card_names: cardNames })
+            })
+            if (res.ok) {
+                setShowConfigModal(false);
+                fetchArchetypeConfigs();
+            }
+        } catch (err) {
+            console.error('Failed to save config:', err)
+        }
     }
 
     const deleteTournament = async (id: string) => {
@@ -185,14 +227,12 @@ export default function MetaReport() {
     const submitTournament = async (e: React.FormEvent) => {
         e.preventDefault()
         const endpoint = isEditing ? '/api/update-tournament' : '/api/save-tournament';
-
         try {
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newTournament)
             })
-
             if (res.ok) {
                 setShowModal(false)
                 setIsEditing(false)
@@ -205,7 +245,7 @@ export default function MetaReport() {
     }
 
     return (
-        <main className="flex-1 p-6 lg:p-12 max-w-[1600px] mx-auto w-full relative border border-white/5">
+        <main className="flex-1 p-6 lg:p-12 max-w-[1600px] mx-auto w-full relative">
             {/* Page Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
@@ -297,25 +337,42 @@ export default function MetaReport() {
                                                 strokeWidth="12"
                                                 strokeDasharray={strokeDasharray}
                                                 strokeDashoffset={strokeDashoffset}
-                                                style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'center' }}
-                                                className={item.color.replace('bg-', 'text-')}
+                                                onMouseEnter={() => setHoveredSegment({ name: item.name, percentage: item.percentage })}
+                                                onMouseLeave={() => setHoveredSegment(null)}
+                                                style={{
+                                                    transform: `rotate(${rotation}deg)`,
+                                                    transformOrigin: 'center',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                                className={`${item.color.replace('bg-', 'text-')} hover:stroke-[14px]`}
                                             />
                                         );
                                     })}
                                 </svg>
-                                <div className="absolute flex flex-col items-center">
-                                    <span className="text-5xl font-black text-white italic tracking-tighter">{totalPeakPercentage}%</span>
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-4 text-center truncate max-w-[150px]">{chartData[0]?.name.split(' ')[0] || 'Meta'}</span>
+                                <div className="absolute flex flex-col items-center pointer-events-none animate-in fade-in duration-300">
+                                    <span className="text-5xl font-black text-white italic tracking-tighter">
+                                        {displayData ? displayData.percentage.toFixed(0) : '0'}%
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-4 text-center truncate max-w-[150px]">
+                                        {displayData ? displayData.name : 'Meta'}
+                                    </span>
                                 </div>
                             </div>
 
                             <div className="space-y-6">
                                 {chartData.length > 0 ? chartData.map((item, idx) => (
-                                    <div key={idx} className="space-y-2">
+                                    <div key={idx} className="space-y-2 group">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <span className={`size-2.5 rounded-sm ${item.color} shadow-[0_0_10px_rgba(19,91,236,0.3)]`}></span>
                                                 <span className="text-xs font-bold text-slate-200">{item.name}</span>
+                                                <button
+                                                    onClick={() => openConfigModal(item.name)}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded"
+                                                >
+                                                    <span className="material-symbols-outlined text-[12px] text-slate-500">settings</span>
+                                                </button>
                                             </div>
                                             <span className="text-xs font-black text-white">{item.percentage.toFixed(1)}%</span>
                                         </div>
@@ -377,16 +434,23 @@ export default function MetaReport() {
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="size-5 rounded flex items-center justify-center bg-slate-800 group-hover:bg-blue-primary/20 transition-colors">
+                                                        <div className="size-5 rounded flex items-center justify-center bg-slate-800 group-hover:bg-blue-primary/20 transition-colors relative overflow-hidden">
                                                             <span className="material-symbols-outlined text-[12px] text-blue-primary">query_stats</span>
+                                                            {archetypeConfigs[result.archetype]?.length > 0 && (
+                                                                <img
+                                                                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(archetypeConfigs[result.archetype][0])}.jpg`}
+                                                                    className="absolute inset-0 object-cover opacity-30"
+                                                                    alt=""
+                                                                />
+                                                            )}
                                                         </div>
                                                         <span className="text-slate-400 font-bold text-xs">{result.archetype}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <span className={`px-2.5 py-1 rounded-sm text-[9px] font-black uppercase tracking-widest ${result.top === 'Winner' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
-                                                            result.top === 'Finalist' ? 'bg-gold/10 text-gold border border-gold/30' :
-                                                                'bg-blue-primary/10 text-blue-primary border border-blue-primary/30'
+                                                        result.top === 'Finalist' ? 'bg-gold/10 text-gold border border-gold/30' :
+                                                            'bg-blue-primary/10 text-blue-primary border border-blue-primary/30'
                                                         }`}>
                                                         {result.top}
                                                     </span>
@@ -468,12 +532,21 @@ export default function MetaReport() {
                         </div>
                         <div className="space-y-3">
                             {chartData.slice(0, 5).map(deck => (
-                                <div key={deck.name} className="flex items-center justify-between p-3 rounded-lg border border-white/5 hover:bg-blue-primary/5 transition-colors group">
-                                    <div className="flex items-center gap-3">
+                                <div key={deck.name} className="flex items-center justify-between p-3 rounded-lg border border-white/5 hover:bg-blue-primary/5 transition-colors group relative overflow-hidden">
+                                    {archetypeConfigs[deck.name]?.length > 0 && (
+                                        <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
+                                            <img
+                                                src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(archetypeConfigs[deck.name][0])}.jpg`}
+                                                className="w-full h-full object-cover"
+                                                alt=""
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-3 relative z-10">
                                         <span className={`size-1.5 rounded-full ${deck.color}`}></span>
                                         <span className="text-xs font-bold text-slate-400 group-hover:text-white uppercase">{deck.name}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 relative z-10">
                                         <span className="text-[10px] font-black text-white">{deck.percentage.toFixed(1)}%</span>
                                         <span className="material-symbols-outlined text-sm text-blue-primary group-hover:translate-x-1 transition-transform">trending_up</span>
                                     </div>
@@ -577,6 +650,50 @@ export default function MetaReport() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {showConfigModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-background-dark/95 backdrop-blur-md" onClick={() => setShowConfigModal(false)} />
+                    <div className="glass w-full max-w-md rounded-2xl overflow-hidden relative z-10 border border-gold/30 shadow-[0_0_50px_rgba(255,184,0,0.1)]">
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-gold/5">
+                            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Deck Configuration</h2>
+                            <button onClick={() => setShowConfigModal(false)}>
+                                <span className="material-symbols-outlined text-slate-400 hover:text-white transition-colors">close</span>
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-4 text-center">
+                                <div className="size-16 rounded-2xl bg-gold/10 flex items-center justify-center mx-auto border border-gold/20 shadow-inner">
+                                    <span className="material-symbols-outlined text-gold text-3xl">style</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{activeConfigArchetype}</h3>
+                                    <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">Assign signature cards to this engine</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Card Names (Separate by comma)</label>
+                                <input
+                                    type="text"
+                                    value={configCardNames}
+                                    onChange={(e) => setConfigCardNames(e.target.value)}
+                                    placeholder="e.g. Snake-Eye Ash, Snake-Eye Oak"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-gold transition-all font-bold"
+                                />
+                                <p className="text-[9px] text-slate-600 italic">Max 2 cards. These populate visuals in charts and trends.</p>
+                            </div>
+
+                            <button
+                                onClick={saveArchetypeConfig}
+                                className="w-full py-4 bg-gold rounded-xl text-[10px] font-black uppercase tracking-widest text-background-dark shadow-xl shadow-gold/10 hover:bg-gold/90 transition-all"
+                            >
+                                Save Configuration
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
