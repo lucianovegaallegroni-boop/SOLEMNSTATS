@@ -17,6 +17,7 @@ export interface YGOCard {
 }
 
 export interface CardMetadata {
+    id: number;
     type: string;
     image_url: string;
     attribute?: string;
@@ -69,6 +70,7 @@ export async function getCardsMetadata(names: string[]): Promise<Record<string, 
             if (response.status === 200) {
                 for (const card of response.data.data || []) {
                     metadataMap[card.name.toLowerCase()] = {
+                        id: card.id,
                         type: card.type,
                         image_url: card.card_images[0].image_url,
                         attribute: card.attribute,
@@ -95,6 +97,7 @@ export async function findBestMatch(name: string): Promise<CardMetadata & { name
         if (response.status === 200 && response.data.data?.length) {
             const card = response.data.data[0];
             return {
+                id: card.id,
                 name: card.name,
                 type: card.type,
                 image_url: card.card_images[0].image_url,

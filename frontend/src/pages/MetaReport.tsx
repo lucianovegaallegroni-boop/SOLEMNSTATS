@@ -16,7 +16,13 @@ interface Tournament {
 
 type ViewType = 'Format' | 'Tournament' | 'Month'
 
-const ArchetypeAvatar = ({ names, size = 'size-8', className = '' }: { names: string[], size?: string, className?: string }) => {
+const ArchetypeAvatar = ({ names, metadata, size = 'size-8', className = '' }: { names: string[], metadata: Record<string, any>, size?: string, className?: string }) => {
+    const getUrl = (name: string) => {
+        const id = metadata[name.toLowerCase()]?.id;
+        if (id) return `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`;
+        return `https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(name)}.jpg`;
+    };
+
     if (!names || names.length === 0) {
         return (
             <div className={`${size} rounded-full bg-slate-800/50 flex items-center justify-center border border-white/5 shadow-inner ${className}`}>
@@ -29,7 +35,7 @@ const ArchetypeAvatar = ({ names, size = 'size-8', className = '' }: { names: st
         return (
             <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg bg-slate-900 ${className}`}>
                 <img
-                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[0])}.jpg`}
+                    src={getUrl(names[0])}
                     className="w-full h-full object-cover"
                     alt=""
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -43,7 +49,7 @@ const ArchetypeAvatar = ({ names, size = 'size-8', className = '' }: { names: st
         <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg flex bg-slate-900 ${className}`}>
             <div className="w-1/2 h-full border-r border-white/10 relative overflow-hidden">
                 <img
-                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[0])}.jpg`}
+                    src={getUrl(names[0])}
                     className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
                     alt=""
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -51,7 +57,7 @@ const ArchetypeAvatar = ({ names, size = 'size-8', className = '' }: { names: st
             </div>
             <div className="w-1/2 h-full relative overflow-hidden">
                 <img
-                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[1])}.jpg`}
+                    src={getUrl(names[1])}
                     className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
                     alt=""
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -79,6 +85,7 @@ export default function MetaReport() {
     const [configCardNames, setConfigCardNames] = useState<string>('')
     const [cardSuggestions, setCardSuggestions] = useState<any[]>([])
     const [showSuggestions, setShowSuggestions] = useState(false)
+    const [cardMetadata, setCardMetadata] = useState<Record<string, any>>({})
 
     // Fetch data on mount
     useEffect(() => {
@@ -117,13 +124,32 @@ export default function MetaReport() {
             const data = await res.json()
             if (Array.isArray(data)) {
                 const configMap: Record<string, string[]> = {}
+                const allCardNames = new Set<string>()
                 data.forEach((c: any) => {
                     configMap[c.name] = c.card_names
+                    c.card_names.forEach((name: string) => allCardNames.add(name))
                 })
                 setArchetypeConfigs(configMap)
+                if (allCardNames.size > 0) {
+                    fetchMetadata(Array.from(allCardNames))
+                }
             }
         } catch (err) {
             console.error('Failed to fetch configs:', err)
+        }
+    }
+
+    const fetchMetadata = async (names: string[]) => {
+        try {
+            const res = await fetch('/api/get-cards-metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ names })
+            })
+            const data = await res.json()
+            setCardMetadata(prev => ({ ...prev, ...data }))
+        } catch (err) {
+            console.error('Failed to fetch metadata:', err)
         }
     }
 
@@ -183,14 +209,21 @@ export default function MetaReport() {
         return () => clearTimeout(timer);
     }, [configCardNames]);
 
-    const selectSuggestion = (name: string) => {
+    const selectSuggestion = (card: any) => {
         const parts = configCardNames.split(',').map(s => s.trim());
         parts.pop(); // Remove the incomplete name
-        parts.push(name); // Add the selected full name
+        parts.push(card.name); // Add the selected full name
 
         // Update input and show comma if we only have one card so far
         const newValue = parts.join(', ');
         setConfigCardNames(newValue + (parts.length < 2 ? ', ' : ''));
+
+        // Store metadata immediately to avoid extra fetch
+        setCardMetadata(prev => ({
+            ...prev,
+            [card.name.toLowerCase()]: card
+        }));
+
         setShowSuggestions(false);
         setCardSuggestions([]);
     };
@@ -446,6 +479,7 @@ export default function MetaReport() {
                                         <div className="absolute inset-0 flex items-center justify-center opacity-20 -z-10 group/center rotate-12">
                                             <ArchetypeAvatar
                                                 names={archetypeConfigs[displayData.name] || []}
+                                                metadata={cardMetadata}
                                                 size="size-48"
                                                 className="blur-[2px]"
                                             />
@@ -467,6 +501,7 @@ export default function MetaReport() {
                                             <div className="flex items-center gap-3">
                                                 <ArchetypeAvatar
                                                     names={archetypeConfigs[item.name] || []}
+                                                    metadata={cardMetadata}
                                                     size="size-5"
                                                     className={`border-2 ${item.color.replace('bg-', 'border-')}`}
                                                 />
@@ -540,6 +575,7 @@ export default function MetaReport() {
                                                     <div className="flex items-center gap-2">
                                                         <ArchetypeAvatar
                                                             names={archetypeConfigs[result.archetype] || []}
+                                                            metadata={cardMetadata}
                                                             size="size-5"
                                                         />
                                                         <span className="text-slate-400 font-bold text-xs">{result.archetype}</span>
@@ -634,6 +670,7 @@ export default function MetaReport() {
                                     <div className="absolute inset-0 opacity-10 group-hover:opacity-25 transition-all duration-500">
                                         <ArchetypeAvatar
                                             names={archetypeConfigs[deck.name] || []}
+                                            metadata={cardMetadata}
                                             size="w-full h-full"
                                             className="rounded-none border-0 shadow-none blur-[1px] object-cover scale-150 group-hover:scale-110 transition-transform duration-700"
                                         />
@@ -767,7 +804,9 @@ export default function MetaReport() {
                                         <div key={idx} className="relative group/card">
                                             <div className="size-20 rounded-2xl bg-slate-800 border-2 border-gold/40 overflow-hidden shadow-lg shadow-gold/10 relative">
                                                 <img
-                                                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(cardName)}.jpg`}
+                                                    src={cardMetadata[cardName.toLowerCase()]?.id
+                                                        ? `https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[cardName.toLowerCase()].id}.jpg`
+                                                        : `https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(cardName)}.jpg`}
                                                     className="w-full h-full object-cover"
                                                     alt={cardName}
                                                     onError={(e) => {
@@ -810,7 +849,7 @@ export default function MetaReport() {
                                             {cardSuggestions.map((card) => (
                                                 <button
                                                     key={card.id}
-                                                    onClick={() => selectSuggestion(card.name)}
+                                                    onClick={() => selectSuggestion(card)}
                                                     className="w-full flex items-center gap-3 p-3 hover:bg-gold/10 transition-colors text-left border-b border-white/5 last:border-0"
                                                 >
                                                     <img
