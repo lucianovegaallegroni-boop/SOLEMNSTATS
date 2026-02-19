@@ -16,6 +16,51 @@ interface Tournament {
 
 type ViewType = 'Format' | 'Tournament' | 'Month'
 
+const ArchetypeAvatar = ({ names, size = 'size-8', className = '' }: { names: string[], size?: string, className?: string }) => {
+    if (!names || names.length === 0) {
+        return (
+            <div className={`${size} rounded-full bg-slate-800/50 flex items-center justify-center border border-white/5 shadow-inner ${className}`}>
+                <span className="material-symbols-outlined text-[10px] text-blue-primary/40">query_stats</span>
+            </div>
+        );
+    }
+
+    if (names.length === 1) {
+        return (
+            <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg bg-slate-900 ${className}`}>
+                <img
+                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[0])}.jpg`}
+                    className="w-full h-full object-cover"
+                    alt=""
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+            </div>
+        );
+    }
+
+    // Split layout for 2 cards
+    return (
+        <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg flex bg-slate-900 ${className}`}>
+            <div className="w-1/2 h-full border-r border-white/10 relative overflow-hidden">
+                <img
+                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[0])}.jpg`}
+                    className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
+                    alt=""
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+            </div>
+            <div className="w-1/2 h-full relative overflow-hidden">
+                <img
+                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(names[1])}.jpg`}
+                    className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
+                    alt=""
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+            </div>
+        </div>
+    );
+};
+
 export default function MetaReport() {
     const [viewType, setViewType] = useState<ViewType>('Format')
     const [showModal, setShowModal] = useState(false)
@@ -396,11 +441,20 @@ export default function MetaReport() {
                                         );
                                     })}
                                 </svg>
-                                <div className="absolute flex flex-col items-center pointer-events-none animate-in fade-in duration-300">
-                                    <span className="text-5xl font-black text-white italic tracking-tighter">
+                                <div className="absolute flex flex-col items-center pointer-events-none animate-in fade-in duration-300 w-full h-full justify-center">
+                                    {displayData && (
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-20 -z-10 group/center rotate-12">
+                                            <ArchetypeAvatar
+                                                names={archetypeConfigs[displayData.name] || []}
+                                                size="size-48"
+                                                className="blur-[2px]"
+                                            />
+                                        </div>
+                                    )}
+                                    <span className="text-5xl font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
                                         {displayData ? displayData.percentage.toFixed(0) : '0'}%
                                     </span>
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-4 text-center truncate max-w-[150px]">
+                                    <span className="text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] px-4 text-center truncate max-w-[150px] bg-background-dark/40 backdrop-blur-sm py-1 rounded-full mt-1 border border-white/5">
                                         {displayData ? displayData.name : 'Meta'}
                                     </span>
                                 </div>
@@ -411,7 +465,11 @@ export default function MetaReport() {
                                     <div key={idx} className="space-y-2 group">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <span className={`size-2.5 rounded-sm ${item.color} shadow-[0_0_10px_rgba(19,91,236,0.3)]`}></span>
+                                                <ArchetypeAvatar
+                                                    names={archetypeConfigs[item.name] || []}
+                                                    size="size-5"
+                                                    className={`border-2 ${item.color.replace('bg-', 'border-')}`}
+                                                />
                                                 <span className="text-xs font-bold text-slate-200">{item.name}</span>
                                                 <button
                                                     onClick={() => openConfigModal(item.name)}
@@ -480,19 +538,10 @@ export default function MetaReport() {
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="size-5 rounded flex items-center justify-center bg-slate-800 group-hover:bg-blue-primary/20 transition-colors relative overflow-hidden">
-                                                            <span className="material-symbols-outlined text-[12px] text-blue-primary">query_stats</span>
-                                                            {archetypeConfigs[result.archetype]?.length > 0 && (
-                                                                <img
-                                                                    src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(archetypeConfigs[result.archetype][0])}.jpg`}
-                                                                    className="absolute inset-0 object-cover opacity-30"
-                                                                    alt=""
-                                                                    onError={(e) => {
-                                                                        (e.target as HTMLImageElement).style.display = 'none';
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </div>
+                                                        <ArchetypeAvatar
+                                                            names={archetypeConfigs[result.archetype] || []}
+                                                            size="size-5"
+                                                        />
                                                         <span className="text-slate-400 font-bold text-xs">{result.archetype}</span>
                                                     </div>
                                                 </td>
@@ -582,18 +631,13 @@ export default function MetaReport() {
                         <div className="space-y-3">
                             {chartData.slice(0, 5).map(deck => (
                                 <div key={deck.name} className="flex items-center justify-between p-3 rounded-lg border border-white/5 hover:bg-blue-primary/5 transition-colors group relative overflow-hidden">
-                                    {archetypeConfigs[deck.name]?.length > 0 && (
-                                        <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
-                                            <img
-                                                src={`https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(deck.name)}.jpg`}
-                                                className="w-full h-full object-cover"
-                                                alt=""
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                }}
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="absolute inset-0 opacity-10 group-hover:opacity-25 transition-all duration-500">
+                                        <ArchetypeAvatar
+                                            names={archetypeConfigs[deck.name] || []}
+                                            size="w-full h-full"
+                                            className="rounded-none border-0 shadow-none blur-[1px] object-cover scale-150 group-hover:scale-110 transition-transform duration-700"
+                                        />
+                                    </div>
                                     <div className="flex items-center gap-3 relative z-10">
                                         <span className={`size-1.5 rounded-full ${deck.color}`}></span>
                                         <span className="text-xs font-bold text-slate-400 group-hover:text-white uppercase">{deck.name}</span>
