@@ -32,6 +32,8 @@ export default function MetaReport() {
     const [showConfigModal, setShowConfigModal] = useState(false)
     const [activeConfigArchetype, setActiveConfigArchetype] = useState<string>('')
     const [configCardNames, setConfigCardNames] = useState<string>('')
+    const [cardSuggestions, setCardSuggestions] = useState<any[]>([])
+    const [showSuggestions, setShowSuggestions] = useState(false)
 
     // Fetch data on mount
     useEffect(() => {
@@ -99,12 +101,54 @@ export default function MetaReport() {
 
     const [newTournament, setNewTournament] = useState<Tournament>(initialNewTournament)
 
+    // List of months for the Month view selection
     const months = [
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
     ]
 
-    // Filtered Tournaments based on ViewType
+    // Card Search Logic for Deck Configuration Modal
+    useEffect(() => {
+        // Find the last card name being typed (split by comma)
+        const parts = configCardNames.split(',');
+        const lastPart = parts[parts.length - 1]?.trim() || '';
+
+        // Only search if the user has typed at least 3 characters
+        if (lastPart.length < 3) {
+            setCardSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/search-cards?q=${encodeURIComponent(lastPart)}`);
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    // Limit to top 5 results for the dropdown
+                    setCardSuggestions(data.slice(0, 5));
+                    setShowSuggestions(true);
+                }
+            } catch (err) {
+                console.error('Card search failed:', err);
+                setShowSuggestions(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [configCardNames]);
+
+    const selectSuggestion = (name: string) => {
+        const parts = configCardNames.split(',').map(s => s.trim());
+        parts.pop(); // Remove the incomplete name
+        parts.push(name); // Add the selected full name
+
+        // Update input and show comma if we only have one card so far
+        const newValue = parts.join(', ');
+        setConfigCardNames(newValue + (parts.length < 2 ? ', ' : ''));
+        setShowSuggestions(false);
+        setCardSuggestions([]);
+    };
     const filteredTournaments = useMemo(() => {
         if (viewType === 'Tournament' && selectedTournamentId) {
             return tournaments.filter(t => t.id === selectedTournamentId);
@@ -705,15 +749,41 @@ export default function MetaReport() {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-2 relative">
                                 <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Card Names (Separate by comma)</label>
                                 <input
                                     type="text"
                                     value={configCardNames}
                                     onChange={(e) => setConfigCardNames(e.target.value)}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                                     placeholder="e.g. Snake-Eye Ash, Snake-Eye Oak"
                                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-gold transition-all font-bold"
                                 />
+
+                                {showSuggestions && cardSuggestions.length > 0 && (
+                                    <div className="absolute left-0 right-0 top-full mt-2 glass border border-gold/30 rounded-xl overflow-hidden z-20 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                            {cardSuggestions.map((card) => (
+                                                <button
+                                                    key={card.id}
+                                                    onClick={() => selectSuggestion(card.name)}
+                                                    className="w-full flex items-center gap-3 p-3 hover:bg-gold/10 transition-colors text-left border-b border-white/5 last:border-0"
+                                                >
+                                                    <img
+                                                        src={card.image_url_small}
+                                                        alt=""
+                                                        className="size-8 rounded object-cover border border-white/10"
+                                                    />
+                                                    <div>
+                                                        <p className="text-[11px] font-black text-white uppercase tracking-tight">{card.name}</p>
+                                                        <p className="text-[9px] text-slate-500 font-bold uppercase">{card.type}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <p className="text-[9px] text-slate-600 italic">Max 2 cards. These populate visuals in charts and trends.</p>
                             </div>
 
