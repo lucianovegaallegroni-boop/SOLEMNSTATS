@@ -20,8 +20,20 @@ const ArchetypeAvatar = ({ names, metadata, size = 'size-8', className = '' }: {
     const getUrl = (name: string) => {
         const id = metadata[name.trim().toLowerCase()]?.id;
         if (id) return `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`;
-        return undefined; // Cropped CDN requires ID. No ID = no cropped image.
+        return undefined;
     };
+
+    const getBgColor = (name: string) => {
+        const colors = ['bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-rose-600', 'bg-emerald-600', 'bg-amber-600'];
+        const charCode = name.charCodeAt(0) || 0;
+        return colors[charCode % colors.length];
+    };
+
+    const Placeholder = ({ name }: { name: string }) => (
+        <div className={`w-full h-full ${getBgColor(name)} flex items-center justify-center`}>
+            <span className="text-[8px] font-black text-white uppercase opacity-40">{name.charAt(0)}</span>
+        </div>
+    );
 
     if (!names || names.length === 0) {
         return (
@@ -32,39 +44,65 @@ const ArchetypeAvatar = ({ names, metadata, size = 'size-8', className = '' }: {
     }
 
     if (names.length === 1) {
+        const url = getUrl(names[0]);
         return (
             <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg bg-slate-900 ${className}`}>
-                <img
-                    src={getUrl(names[0])}
-                    className="w-full h-full object-cover"
-                    alt=""
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                {url ? (
+                    <img
+                        src={url}
+                        className="w-full h-full object-cover"
+                        alt=""
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                ) : <Placeholder name={names[0]} />}
             </div>
         );
     }
 
     // Split layout for 2 cards
+    const url1 = getUrl(names[0]);
+    const url2 = getUrl(names[1]);
+
     return (
         <div className={`${size} rounded-full border border-white/10 overflow-hidden shadow-lg flex bg-slate-900 ${className}`}>
             <div className="w-1/2 h-full border-r border-white/10 relative overflow-hidden">
-                <img
-                    src={getUrl(names[0])}
-                    className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
-                    alt=""
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                {url1 ? (
+                    <img
+                        src={url1}
+                        className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
+                        alt=""
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; shadowPlaceholder(e, names[0]); }}
+                    />
+                ) : <Placeholder name={names[0]} />}
             </div>
             <div className="w-1/2 h-full relative overflow-hidden">
-                <img
-                    src={getUrl(names[1])}
-                    className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
-                    alt=""
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                {url2 ? (
+                    <img
+                        src={url2}
+                        className="absolute h-full w-[200%] max-w-none object-cover left-[-50%]"
+                        alt=""
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; shadowPlaceholder(e, names[1]); }}
+                    />
+                ) : <Placeholder name={names[1]} />}
             </div>
         </div>
     );
+};
+
+// Helper to show placeholder on img error in split view
+const shadowPlaceholder = (e: React.SyntheticEvent<HTMLImageElement, Event>, name: string) => {
+    const parent = (e.target as HTMLImageElement).parentElement;
+    if (parent) {
+        const bgColors = ['bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-rose-600', 'bg-emerald-600', 'bg-amber-600'];
+        const charCode = name.charCodeAt(0) || 0;
+        const bgColor = bgColors[charCode % bgColors.length].replace('bg-', '');
+
+        parent.style.backgroundColor = `var(--${bgColor}, #1e293b)`;
+        const span = document.createElement('span');
+        span.className = 'text-[8px] font-black text-white uppercase opacity-40 absolute inset-0 flex items-center justify-center';
+        span.innerText = name.charAt(0);
+        parent.appendChild(span);
+    }
 };
 
 export default function MetaReport() {
