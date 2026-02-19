@@ -249,7 +249,7 @@ function Dashboard() {
                 setSelectedCard(cardDetailsCache[cardName]);
                 setIsTagModalOpen(true);
             } else {
-                fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(cardName)}`)
+                fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(cardName)}`)
                     .then(res => res.json())
                     .then(data => {
                         const match = data.find((c: any) => c.name.toLowerCase() === cardName.toLowerCase()) || data[0];

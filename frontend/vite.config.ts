@@ -18,4 +18,15 @@ export default defineConfig({
     tailwindcss(),
   ],
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['recharts'],
+          'vendor-utils': ['lodash', 'crypto-js', '@supabase/supabase-js'],
+        },
+      },
+    },
+  },
 })

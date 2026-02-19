@@ -65,7 +65,7 @@ function Home() {
         }
 
         const timer = setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/search-cards?q=${cleanLine}`)
+            fetch(`${API_BASE_URL}/api/cards?q=${cleanLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 30)))
                 .catch(err => console.error('Search error:', err));
@@ -88,7 +88,7 @@ function Home() {
 
         const timer = setTimeout(() => {
             missing.forEach(name => {
-                fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+                fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(name)}`)
                     .then(res => res.json())
                     .then(data => {
                         const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
@@ -108,7 +108,7 @@ function Home() {
             setSelectedCard(cardDetailsCache[name]);
             return;
         }
-        fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+        fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(name)}`)
             .then(res => res.json())
             .then(data => {
                 const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
@@ -204,7 +204,7 @@ function Home() {
 
         setIsAnalyzing(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/save-deck/`, {
+            const response = await fetch(`${API_BASE_URL}/api/decks`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

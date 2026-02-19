@@ -40,8 +40,8 @@ function Decks() {
 
     const fetchDecks = () => {
         const url = user
-            ? `${API_BASE_URL}/api/list-decks?user_id=${user.id}`
-            : `${API_BASE_URL}/api/list-decks`
+            ? `${API_BASE_URL}/api/decks?user_id=${user.id}`
+            : `${API_BASE_URL}/api/decks`
 
         fetch(url)
             .then(response => response.json())

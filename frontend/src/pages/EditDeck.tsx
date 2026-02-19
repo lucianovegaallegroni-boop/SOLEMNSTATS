@@ -59,7 +59,7 @@ function EditDeck() {
         }
 
         const timer = setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/search-cards?q=${lastLine}`)
+            fetch(`${API_BASE_URL}/api/cards?q=${lastLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 30)))
                 .catch(err => console.error('Search error:', err));

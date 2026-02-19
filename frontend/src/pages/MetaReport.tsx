@@ -137,7 +137,7 @@ export default function MetaReport() {
 
     const fetchTournaments = async () => {
         try {
-            const res = await fetch('/api/list-tournaments')
+            const res = await fetch('/api/tournaments')
             const data = await res.json()
             if (Array.isArray(data)) {
                 setTournaments(data)
@@ -162,7 +162,7 @@ export default function MetaReport() {
 
     const fetchArchetypeConfigs = async () => {
         try {
-            const res = await fetch('/api/list-archetype-configs')
+            const res = await fetch('/api/archetypes')
             const data = await res.json()
             if (Array.isArray(data)) {
                 const configMap: Record<string, string[]> = {}
@@ -185,7 +185,7 @@ export default function MetaReport() {
 
     const fetchMetadata = async (names: string[]) => {
         try {
-            const res = await fetch('/api/get-cards-metadata', {
+            const res = await fetch('/api/cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ names })
@@ -237,7 +237,7 @@ export default function MetaReport() {
 
         const timer = setTimeout(async () => {
             try {
-                const res = await fetch(`/api/search-cards?q=${encodeURIComponent(lastPart)}`);
+                const res = await fetch(`/api/cards?q=${encodeURIComponent(lastPart)}`);
                 const data = await res.json();
                 if (Array.isArray(data)) {
                     // Limit to top 5 results for the dropdown
@@ -393,7 +393,7 @@ export default function MetaReport() {
     const saveArchetypeConfig = async () => {
         const cardNames = configCardNames.split(',').map(s => s.trim()).filter(s => s !== '').slice(0, 2);
         try {
-            const res = await fetch('/api/save-archetype-config', {
+            const res = await fetch('/api/archetypes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: activeConfigArchetype, card_names: cardNames })
@@ -410,7 +410,7 @@ export default function MetaReport() {
     const deleteTournament = async (id: string) => {
         if (!confirm('Are you sure you want to delete this tournament?')) return;
         try {
-            const res = await fetch(`/api/delete-tournament?id=${id}`, { method: 'DELETE' })
+            const res = await fetch(`/api/tournaments?id=${id}`, { method: 'DELETE' })
             if (res.ok) fetchTournaments()
         } catch (err) {
             console.error('Delete failed:', err)
@@ -419,7 +419,7 @@ export default function MetaReport() {
 
     const submitTournament = async (e: React.FormEvent) => {
         e.preventDefault()
-        const endpoint = isEditing ? '/api/update-tournament' : '/api/save-tournament';
+        const endpoint = '/api/tournaments';
         try {
             const res = await fetch(endpoint, {
                 method: 'POST',

@@ -51,7 +51,7 @@ export default function Market() {
     const fetchListings = async () => {
         setLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/api/list-market?type=${viewMode}`)
+            const res = await fetch(`${API_BASE_URL}/api/market?type=${viewMode}`)
             const data = await res.json()
             setItems(data)
         } catch (err) {
@@ -70,7 +70,7 @@ export default function Market() {
 
         setIsSearchingCards(true)
         const timer = setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(newItem.cardName)}`)
+            fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(newItem.cardName)}`)
                 .then(res => res.json())
                 .then(data => {
                     setCardSuggestions(Array.isArray(data) ? data.slice(0, 5) : [])
@@ -98,7 +98,7 @@ export default function Market() {
         setSubmitting(true)
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/save-market-item`, {
+            const res = await fetch(`${API_BASE_URL}/api/market`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -132,7 +132,7 @@ export default function Market() {
         if (!user || !window.confirm('¿Estás seguro de que quieres borrar este item?')) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/delete-market-item?id=${id}&user_id=${user.id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/market?id=${id}&user_id=${user.id}`, {
                 method: 'DELETE'
             });
 
