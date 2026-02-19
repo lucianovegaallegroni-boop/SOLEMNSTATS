@@ -18,9 +18,9 @@ type ViewType = 'Format' | 'Tournament' | 'Month'
 
 const ArchetypeAvatar = ({ names, metadata, size = 'size-8', className = '' }: { names: string[], metadata: Record<string, any>, size?: string, className?: string }) => {
     const getUrl = (name: string) => {
-        const id = metadata[name.toLowerCase()]?.id;
+        const id = metadata[name.trim().toLowerCase()]?.id;
         if (id) return `https://images.ygoprodeck.com/images/cards_cropped/${id}.jpg`;
-        return `https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(name)}.jpg`;
+        return undefined; // Cropped CDN requires ID. No ID = no cropped image.
     };
 
     if (!names || names.length === 0) {
@@ -126,8 +126,10 @@ export default function MetaReport() {
                 const configMap: Record<string, string[]> = {}
                 const allCardNames = new Set<string>()
                 data.forEach((c: any) => {
-                    configMap[c.name] = c.card_names
-                    c.card_names.forEach((name: string) => allCardNames.add(name))
+                    configMap[c.name] = (c.card_names || []).map((n: string) => n.trim());
+                    configMap[c.name].forEach((name: string) => {
+                        if (name) allCardNames.add(name);
+                    });
                 })
                 setArchetypeConfigs(configMap)
                 if (allCardNames.size > 0) {
@@ -804,9 +806,9 @@ export default function MetaReport() {
                                         <div key={idx} className="relative group/card">
                                             <div className="size-20 rounded-2xl bg-slate-800 border-2 border-gold/40 overflow-hidden shadow-lg shadow-gold/10 relative">
                                                 <img
-                                                    src={cardMetadata[cardName.toLowerCase()]?.id
-                                                        ? `https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[cardName.toLowerCase()].id}.jpg`
-                                                        : `https://images.ygoprodeck.com/images/cards_cropped/${encodeURIComponent(cardName)}.jpg`}
+                                                    src={cardMetadata[cardName.trim().toLowerCase()]?.id
+                                                        ? `https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[cardName.trim().toLowerCase()].id}.jpg`
+                                                        : undefined}
                                                     className="w-full h-full object-cover"
                                                     alt={cardName}
                                                     onError={(e) => {
