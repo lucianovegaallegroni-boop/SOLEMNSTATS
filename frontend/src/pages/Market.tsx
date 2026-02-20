@@ -21,7 +21,7 @@ interface MarketItem {
 }
 
 export default function Market() {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const [viewMode, setViewMode] = useState<'buy' | 'sell'>('sell')
     const [showListModal, setShowListModal] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
@@ -65,7 +65,11 @@ export default function Market() {
     const fetchListings = async () => {
         setLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/api/market?type=${viewMode}`)
+            const headers: Record<string, string> = {}
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`
+            }
+            const res = await fetch(`${API_BASE_URL}/api/market?type=${viewMode}`, { headers })
             const data = await res.json()
             if (Array.isArray(data)) {
                 setItems(data)
@@ -133,7 +137,10 @@ export default function Market() {
 
                     return fetch(`${API_BASE_URL}/api/market`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+                        },
                         body: JSON.stringify({
                             type: 'buy',
                             card_name: itemLine,
@@ -178,7 +185,10 @@ export default function Market() {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/market`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+                    },
                     body: JSON.stringify({
                         type: newItem.type,
                         card_name: newItem.cardName,
@@ -214,7 +224,8 @@ export default function Market() {
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/market?id=${id}&user_id=${user.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}
             });
 
             if (!res.ok) {
@@ -290,7 +301,7 @@ export default function Market() {
                 </div>
             </div>
 
-            <main className="max-w-7xl mx-auto px-6 pt-8">
+            <main className="w-full px-4 sm:px-6 lg:px-8 pt-8">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-32 opacity-50">
                         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>

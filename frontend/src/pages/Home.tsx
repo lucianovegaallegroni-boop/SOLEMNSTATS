@@ -247,7 +247,7 @@ function Home() {
     }
 
     return (
-        <main className="max-w-full mx-auto px-6 py-12">
+        <main className="w-full px-4 sm:px-6 lg:px-8 py-8 md:py-12">
             <div className="text-center mb-10">
                 <h1 className="text-4xl font-bold mb-4 tracking-tight">Import Your <span className="text-primary">Deck List</span></h1>
                 <p className="text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">
@@ -256,7 +256,7 @@ function Home() {
             </div>
 
             <div className="bg-white dark:bg-card-dark border border-slate-200 dark:border-border-dark rounded-xl shadow-2xl overflow-hidden">
-                <div className="p-8">
+                <div className="p-4 sm:p-6 lg:p-8">
                     <div className="mb-10">
                         <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Deck Name</label>
                         <input

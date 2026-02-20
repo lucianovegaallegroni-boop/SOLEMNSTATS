@@ -17,6 +17,9 @@ function EditDeck() {
     const [selectedCard, setSelectedCard] = useState<any>(null)
     const [cardDetailsCache, setCardDetailsCache] = useState<Record<string, any>>({})
 
+    const [cursorPosition, setCursorPosition] = useState(0)
+    const [suppressedLine, setSuppressedLine] = useState<string | null>(null)
+
 
     // Fetch and Autocomplete (same as before)
     useEffect(() => {
@@ -48,25 +51,51 @@ function EditDeck() {
 
     useEffect(() => {
         const currentList = deckLists[activeTab];
-        const rawLastLine = currentList.split('\n').pop()?.trim() || '';
-        const hasQuantity = /[xX]\s*\d+$/.test(rawLastLine);
-        const lastLine = rawLastLine.replace(/\s*[xX]\s*\d+$/i, '');
 
-        if (hasQuantity || lastLine.length < 2) {
+        // Find line at cursor
+        let start = cursorPosition;
+        let end = cursorPosition;
+
+        // Safety check for bounds
+        if (start > currentList.length) start = currentList.length;
+        if (end > currentList.length) end = currentList.length;
+
+        while (start > 0 && currentList[start - 1] !== '\n') {
+            start--;
+        }
+        while (end < currentList.length && currentList[end] !== '\n') {
+            end++;
+        }
+
+        const currentLine = currentList.substring(start, end).trim();
+        const cleanLine = currentLine.replace(/ x\d+$/i, '');
+
+        // If this line matches the suppressed line exactly, don't search
+        if (currentLine === suppressedLine) {
+            setSuggestions([]);
+            return;
+        }
+
+        // If we moved to a new line or changed content, clear suppression
+        if (currentLine !== suppressedLine) {
+            setSuppressedLine(null);
+        }
+
+        if (cleanLine.length < 2) {
             setSuggestions([]);
             setActiveSuggestionIdx(0);
             return;
         }
 
         const timer = setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/cards?q=${lastLine}`)
+            fetch(`${API_BASE_URL}/api/cards?q=${cleanLine}`)
                 .then(res => res.json())
                 .then(data => setSuggestions(data.slice(0, 30)))
                 .catch(err => console.error('Search error:', err));
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [deckLists, activeTab]);
+    }, [deckLists, activeTab, cursorPosition, suppressedLine]);
 
     // Metadata auto-fetcher for manual entries
     useEffect(() => {
@@ -82,7 +111,7 @@ function EditDeck() {
 
         const timer = setTimeout(() => {
             missing.forEach(name => {
-                fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+                fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(name)}`)
                     .then(res => res.json())
                     .then(data => {
                         const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
@@ -100,16 +129,31 @@ function EditDeck() {
     const selectSuggestion = (idx: number, area: 'MAIN' | 'EXTRA' | 'SIDE') => {
         if (!suggestions[idx]) return;
         const suggestion = suggestions[idx];
-        const lines = deckLists[area].split('\n');
-        const lastLine = lines[lines.length - 1];
-        const match = lastLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
+        const currentList = deckLists[area];
+
+        let start = cursorPosition;
+        while (start > 0 && currentList[start - 1] !== '\n') start--;
+        let end = cursorPosition;
+        while (end < currentList.length && currentList[end] !== '\n') end++;
+
+        const currentLine = currentList.substring(start, end);
+        const match = currentLine.match(/(.*?)\s*[xX]\s*(\d+)$/);
         const quantity = match ? ` x${match[2]}` : '';
 
-        lines[lines.length - 1] = suggestion.name + quantity;
-        setDeckLists(prev => ({ ...prev, [area]: lines.join('\n') }));
-        setCardMetadata(prev => ({ ...prev, [suggestion.name]: suggestion.image_url_small }));
+        const selectedCardName = suggestion.name;
+        const newLine = selectedCardName + quantity;
+        const newList = currentList.substring(0, start) + newLine + currentList.substring(end);
+
+        setDeckLists(prev => ({ ...prev, [area]: newList }));
+        setCardMetadata(prev => ({ ...prev, [selectedCardName]: suggestion.image_url_small }));
+        setSuppressedLine(newLine);
         setSuggestions([]);
         setActiveSuggestionIdx(0);
+    }
+
+    const handleCursorActivity = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const target = e.target as HTMLTextAreaElement;
+        setCursorPosition(target.selectionStart);
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -132,7 +176,7 @@ function EditDeck() {
             setSelectedCard(cardDetailsCache[name]);
             return;
         }
-        fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(name)}`)
+        fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(name)}`)
             .then(res => res.json())
             .then(data => {
                 const match = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase()) || data[0];
@@ -221,7 +265,7 @@ function EditDeck() {
     if (isLoading) return <div className="min-h-screen flex items-center justify-center text-primary font-black uppercase">Loading Deck Data...</div>
 
     return (
-        <main className="max-w-full mx-auto px-6 py-12">
+        <main className="w-full px-4 sm:px-6 lg:px-8 py-8 md:py-12">
             <div className="flex justify-between items-end mb-10">
                 <div>
                     <h1 className="text-4xl font-black mb-2 uppercase italic tracking-tighter">Edit <span className="text-primary">Deck</span></h1>
@@ -239,7 +283,7 @@ function EditDeck() {
                 </div>
             </div>
 
-            <div className="bg-card-dark border border-border-dark p-8 rounded-xl shadow-2xl">
+            <div className="bg-card-dark border border-border-dark p-4 sm:p-6 lg:p-8 rounded-xl shadow-2xl">
                 <div className="mb-10">
                     <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Deck Name</label>
                     <input
@@ -279,9 +323,12 @@ function EditDeck() {
                                         onFocus={() => setActiveTab(area)}
                                         onChange={(e) => setDeckLists(prev => ({ ...prev, [area]: e.target.value }))}
                                         onKeyDown={handleKeyDown}
+                                        onKeyUp={handleCursorActivity}
+                                        onClick={handleCursorActivity}
+                                        onSelect={handleCursorActivity}
                                     ></textarea>
 
-                                    {activeTab === area && suggestions.length > 0 && (
+                                    {activeTab === area && suggestions.length > 0 && !suppressedLine && (
                                         <div className={`absolute bottom-4 right-4 z-[9999] bg-card-dark border rounded-lg shadow-2xl p-2 min-w-[200px] max-h-[300px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-2 ${area === 'MAIN' ? 'border-primary/30' : area === 'EXTRA' ? 'border-accent-blue/30' : 'border-accent-purple/30'}`}>
                                             <p className={`text-[10px] font-black uppercase mb-2 tracking-widest border-b pb-1 ${area === 'MAIN' ? 'text-primary border-primary/10' : area === 'EXTRA' ? 'text-accent-blue border-accent-blue/10' : 'text-accent-purple border-accent-purple/10'}`}>Suggestions (Shift)</p>
                                             <div className="space-y-1 overflow-y-auto custom-scrollbar pr-1">

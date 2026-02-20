@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase as supabaseClient } from './_lib/supabase';
+import { getSupabase } from './_lib/supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
@@ -11,6 +11,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!deckId || !cardName || !Array.isArray(tags)) {
         return res.status(400).json({ error: 'Invalid request body. Required: deckId, cardName, tags[]' });
     }
+
+    const supabaseClient = getSupabase(req);
 
     // Security Check
     const { data: deckData, error: deckError } = await supabaseClient

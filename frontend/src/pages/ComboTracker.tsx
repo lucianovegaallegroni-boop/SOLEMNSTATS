@@ -36,7 +36,7 @@ function ComboTracker() {
     const handleSearch = async (query: string) => {
         setIsSearching(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/api/search-cards?q=${encodeURIComponent(query)}`)
+            const response = await fetch(`${API_BASE_URL}/api/cards?q=${encodeURIComponent(query)}`)
             const data = await response.json()
             setSearchResults(data)
         } catch (error) {

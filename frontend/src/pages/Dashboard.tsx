@@ -7,7 +7,7 @@ import { debounce } from 'lodash';
 
 function Dashboard() {
     const { id } = useParams<{ id: string }>();
-    const { user } = useAuth();
+    const { user, session } = useAuth();
     const [deck, setDeck] = useState<any>(null);
     // Explicitly check for user_id to avoid undefined issues, treat null user_id as public/read-only or whatever, 
     // but here we want to protect against editing if not owner. 
@@ -162,14 +162,19 @@ function Dashboard() {
         });
 
         try {
-            // Updated to use the batch endpoint (renamed to avoid conflict and cache issues)
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+
             const res = await fetch(`${API_BASE_URL}/api/batch-update-tags`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     deckId: id,
                     cardName: card.cardName || card.name,
-                    tags: newTags
+                    tags: newTags,
+                    userId: user?.id
                 })
             });
 

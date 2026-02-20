@@ -92,7 +92,7 @@ function Decks() {
     }
 
     return (
-        <main className="max-w-[1200px] mx-auto px-6 py-12">
+        <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex justify-between items-end mb-10">
                 <div>
                     <h1 className="text-4xl font-bold tracking-tight text-white uppercase italic">My <span className="text-primary">Decks</span></h1>

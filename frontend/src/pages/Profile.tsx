@@ -34,7 +34,7 @@ export default function Profile() {
         }
         const timer = setTimeout(() => {
             setIsSearching(true)
-            fetch(`${API_BASE_URL}/api/search-cards?q=${searchQuery}`)
+            fetch(`${API_BASE_URL}/api/cards?q=${searchQuery}`)
                 .then(res => res.json())
                 .then(data => setSearchResults(data.slice(0, 20)))
                 .catch(err => console.error('Search error:', err))

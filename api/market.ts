@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase } from './_lib/supabase';
+import { supabase, getSupabase } from './_lib/supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // GET: List market items (from list-market.ts)
@@ -84,7 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Main image for backward compatibility
         const mainImage = image_url || (imagesArray.length > 0 ? imagesArray[0] : null);
 
-        const { data, error } = await supabase
+        const supabaseClient = getSupabase(req);
+        const { data, error } = await supabaseClient
             .from('market_listings')
             .insert({
                 type,
@@ -112,7 +113,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'Missing required parameters (id, user_id)' });
         }
 
-        const { data, error } = await supabase
+        const supabaseClient = getSupabase(req);
+        const { data, error } = await supabaseClient
             .from('market_listings')
             .delete()
             .eq('id', id)
