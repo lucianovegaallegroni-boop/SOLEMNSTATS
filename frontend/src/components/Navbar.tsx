@@ -13,6 +13,7 @@ function Navbar() {
         { to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
         { to: '/meta-report', label: 'Meta Report', icon: 'insights' },
         { to: '/market', label: 'Market', icon: 'storefront' },
+        { to: '/lobby', label: 'Lobby', icon: 'radar' },
         { to: '#', label: 'Card DB', icon: 'search' },
     ]
 

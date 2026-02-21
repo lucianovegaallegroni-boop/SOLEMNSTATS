@@ -30,6 +30,35 @@
     box-shadow: 0 0 15px rgba(75, 0, 130, 0.3);
   }
 
+  .glass-panel {
+    backdrop-filter: blur(12px);
+    background: rgba(48, 40, 57, 0.4);
+    border: 1px solid rgba(127, 19, 236, 0.2);
+  }
+
+  .card-slot {
+    aspect-ratio: 2.5/3.5;
+    background: rgba(127, 19, 236, 0.05);
+    border: 1px dashed rgba(127, 19, 236, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .card-slot:hover {
+    background: rgba(127, 19, 236, 0.15);
+    border-color: #7f13ec;
+    box-shadow: 0 0 15px rgba(127, 19, 236, 0.4);
+  }
+
+  .neon-pulse {
+    box-shadow: 0 0 10px #7f13ec;
+  }
+
+  .active-phase {
+    border-bottom: 3px solid #7f13ec;
+    color: #7f13ec;
+    text-shadow: 0 0 8px rgba(127, 19, 236, 0.6);
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;
   }
