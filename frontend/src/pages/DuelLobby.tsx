@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../config';
 
 interface DuelRoom {
     id: string;
@@ -38,6 +39,29 @@ export default function DuelLobby() {
     const [joinType, setJoinType] = useState('Casual');
     const [showHostModal, setShowHostModal] = useState(false);
 
+    // Deck selection state
+    const [myDecks, setMyDecks] = useState<any[]>([]);
+    const [selectedDeckId, setSelectedDeckId] = useState<string>('');
+    const [showJoinModal, setShowJoinModal] = useState(false);
+    const [roomToJoin, setRoomToJoin] = useState<DuelRoom | null>(null);
+
+    // Fetch user decks
+    const fetchUserDecks = useCallback(async () => {
+        if (!user) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/decks?user_id=${user.id}`);
+            if (res.ok) {
+                const data = await res.json();
+                setMyDecks(data);
+                if (data.length > 0) {
+                    setSelectedDeckId(data[0].id.toString());
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch user decks:', error);
+        }
+    }, [user]);
+
     // Load rooms from Supabase
     const fetchRooms = useCallback(async () => {
         const { data, error } = await supabase
@@ -54,6 +78,7 @@ export default function DuelLobby() {
 
     useEffect(() => {
         fetchRooms();
+        fetchUserDecks();
 
         // Subscribe to real-time changes on duel_rooms
         const channel = supabase
@@ -78,6 +103,7 @@ export default function DuelLobby() {
 
     const handleHostMatch = async () => {
         if (!user) { navigate('/login'); return; }
+        if (!selectedDeckId) { alert('Please select a deck first.'); return; }
         setHosting(true);
 
         const room_code = generateRoomCode();
@@ -93,29 +119,40 @@ export default function DuelLobby() {
 
         if (!error) {
             setShowHostModal(false);
-            navigate(`/duel-simulator/${room_code}`);
+            navigate(`/duel-simulator/${room_code}?deckId=${selectedDeckId}`);
         }
         setHosting(false);
     };
 
-    const handleJoin = async (room: DuelRoom) => {
+    const initiateJoin = (room: DuelRoom) => {
         if (!user) { navigate('/login'); return; }
         if (room.host_id === user.id) {
-            // Host re-entering their own room
+            // Host re-entering their own room (or provide prompt to select deck? In real life host might want to change deck? For simplicity just navigate, we assume host already selected)
             navigate(`/duel-simulator/${room.room_code}`);
             return;
         }
+        setRoomToJoin(room);
+        setShowJoinModal(true);
+    };
 
+    const confirmJoin = async () => {
+        if (!user || !roomToJoin) return;
+        if (!selectedDeckId) { alert('Please select a deck first.'); return; }
+
+        setHosting(true); // Using same loading state for joining
         const { error } = await supabase.from('duel_rooms').update({
             opponent_id: user.id,
             opponent_username: user.user_metadata?.username || user.email?.split('@')[0] || 'Unknown',
             opponent_avatar: user.user_metadata?.avatar_url || null,
             status: 'in_progress',
-        }).eq('id', room.id);
+        }).eq('id', roomToJoin.id);
 
         if (!error) {
-            navigate(`/duel-simulator/${room.room_code}`);
+            setShowJoinModal(false);
+            navigate(`/duel-simulator/${roomToJoin.room_code}?deckId=${selectedDeckId}`);
         }
+        setHosting(false);
+        setRoomToJoin(null);
     };
 
     const handleSpectate = (room: DuelRoom) => {
@@ -142,6 +179,15 @@ export default function DuelLobby() {
                         <h2 className="text-xl font-bold mb-4">Host a New Match</h2>
                         <div className="space-y-4">
                             <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Deck</label>
+                                <select value={selectedDeckId} onChange={e => setSelectedDeckId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-4 py-2.5 outline-none focus:border-primary">
+                                    {myDecks.length === 0 && <option value="">No decks found - Create one first!</option>}
+                                    {myDecks.map(deck => (
+                                        <option key={deck.id} value={deck.id}>{deck.name} ({deck.totalCards} cards)</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Format</label>
                                 <select value={joinFormat} onChange={e => setJoinFormat(e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-4 py-2.5 outline-none focus:border-primary">
                                     <option>Advanced</option>
@@ -162,6 +208,34 @@ export default function DuelLobby() {
                             <button onClick={() => setShowHostModal(false)} className="flex-1 py-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors font-bold text-sm">Cancel</button>
                             <button onClick={handleHostMatch} disabled={hosting} className="flex-1 py-2.5 rounded-lg bg-primary text-white font-bold text-sm hover:brightness-110 disabled:opacity-50">
                                 {hosting ? 'Creating...' : 'Start Room'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Join Modal (Deck Selection) */}
+            {showJoinModal && roomToJoin && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="glass-panel rounded-2xl p-6 w-full max-w-sm border border-primary/30 shadow-2xl shadow-primary/10">
+                        <h2 className="text-xl font-bold mb-1">Join Duel</h2>
+                        <p className="text-sm text-slate-400 mb-4">You are challenging <span className="text-white font-bold">{roomToJoin.host_username}</span></p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Your Deck</label>
+                                <select value={selectedDeckId} onChange={e => setSelectedDeckId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-4 py-2.5 outline-none focus:border-primary">
+                                    {myDecks.length === 0 && <option value="">No decks found - Create one first!</option>}
+                                    {myDecks.map(deck => (
+                                        <option key={deck.id} value={deck.id}>{deck.name} ({deck.totalCards} cards)</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => { setShowJoinModal(false); setRoomToJoin(null); }} className="flex-1 py-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors font-bold text-sm">Cancel</button>
+                            <button onClick={confirmJoin} disabled={hosting || !selectedDeckId} className="flex-1 py-2.5 rounded-lg bg-primary text-white font-bold text-sm hover:brightness-110 disabled:opacity-50">
+                                {hosting ? 'Joining...' : 'Enter Room'}
                             </button>
                         </div>
                     </div>
@@ -268,7 +342,7 @@ export default function DuelLobby() {
 
                                     {room.status === 'waiting' ? (
                                         <button
-                                            onClick={() => handleJoin(room)}
+                                            onClick={() => initiateJoin(room)}
                                             className="w-full md:w-auto bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 py-2 px-6 rounded-lg font-bold transition-colors ml-auto shadow-[0_0_10px_rgba(127,19,236,0)] group-hover:shadow-[0_0_15px_rgba(127,19,236,0.2)]"
                                         >
                                             {room.host_id === user?.id ? 'ENTER ROOM' : 'JOIN DUEL'}

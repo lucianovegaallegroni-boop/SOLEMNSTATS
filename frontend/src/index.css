@@ -37,9 +37,15 @@
   }
 
   .card-slot {
-    aspect-ratio: 2.5/3.5;
+    height: 100%;
+    width: auto;
+    aspect-ratio: 2.5/3.6;
+    border: 1px dashed rgba(127, 19, 236, 0.4);
     background: rgba(127, 19, 236, 0.05);
-    border: 1px dashed rgba(127, 19, 236, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
     transition: all 0.3s ease;
   }
 
@@ -47,6 +53,64 @@
     background: rgba(127, 19, 236, 0.15);
     border-color: #7f13ec;
     box-shadow: 0 0 15px rgba(127, 19, 236, 0.4);
+  }
+
+  .glassmorphism {
+    background: rgba(15, 15, 20, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(127, 19, 236, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  }
+
+  .holographic-glow {
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.2), inset 0 0 10px rgba(0, 242, 255, 0.1);
+    border: 1px solid rgba(0, 242, 255, 0.4);
+  }
+
+  .slot-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.5;
+    position: absolute;
+    bottom: 4px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .player-hand-container {
+    perspective: 1000px;
+  }
+
+  .hand-card {
+    width: 100px;
+    height: 145px;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 4px;
+    transition: transform 0.3s ease, margin 0.3s ease;
+    cursor: pointer;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+  }
+
+  .hand-card:hover {
+    transform: translateY(-40px) scale(1.1) !important;
+    z-index: 50;
+    border-color: #7f13ec;
+  }
+
+  .lp-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .lp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #7f13ec, #00f2ff);
+    width: 100%;
+    transition: width 0.5s ease;
   }
 
   .neon-pulse {
@@ -60,20 +124,16 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: #0a0a0f;
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #2d2d3a;
-    border-radius: 4px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #d4af37;
+    background: #7f13ec;
+    border-radius: 2px;
   }
 }
 

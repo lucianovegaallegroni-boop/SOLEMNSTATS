@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../config';
 
 interface DuelRoom {
     id: string;
@@ -18,26 +19,236 @@ interface DuelRoom {
     spectators: number;
 }
 
-// Named card slot images for demonstration
-const HAND_CARD_IMAGES = [
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCGpLaW5uRzCxd9vEc2kXhkA3Ws1dTYbchRL6fqyfYbBsTs5bTmq505Yu2ueoIUmrnspY5Q2iRC-cpNrVc86tQ439dudmj5NIH7h23OaKGc8Vkix3WEzpqJLS_eUGOiPb5Mkd5yFbpysI37cwla7YZHJDn9uh7kBk8t_enlpgdRIHSvSyS34Su5CFc3HBYr4o2SZegqcGiR-8n0dJ75tfIZNGD1RMcpRimCfJeOYy7KkfaZ3bNM9EpzjskRdQAWX1R5bScVdN8fQu8",
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuC2dBNNwoif_lHH70DyKsc0ZVHQjikyKNX8SU-v0-c4wM8aan2VE3wBNgeGfMN4ej4sfCc2re1aTyjv61NvAcAEMvYc6iohcxloFRJHVqxC0WcsTfFlyhJU3oGPR2wLqWUWm20CbP2xJgx0IGtqua47o-OaQdkTU0avR1iEDLjtWKlb2RwOoTgKHHZgQ0sQAxpUaMOqDE3OSHksntvlKEwlxFRT5u0-yN3c7Z3kVPZof2cx5i3038F-8kX3Wq3GSUqxFzA7sPGURQg",
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCVVqmtHmE4W0m3GXIWxXp6Dg_KeK0ZyGn4IvR4Gvtv71kjSLAUUIQbSsRAXx9vYtkCrnbiWKtGtm75yiBSmFZgIUxdq4WzU_ga-TFYMmkjiJtaY_yJNrlFsS2zUlF8fW3N_G334Km396FH1nEkJi_YgY09Qnpcdsi3-f6LQmDKY4dJEPsQftvOknHUaRviOyZ28QfLa3g7rt9EZZYI6i0AQ1Rf6QMcUQfp9PIbyB1-UOg5v-ot3B2_u69vTP47ZnKrYpqZQ5l1l9s",
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuBkwCWykHuC9eVy0IfzqkGumZrd7PtaNf86CTtkojv6ldJehOoMIVrnVl3NanoAQEjTpVzm3YTtYB1OqL94tZ3tkJBOxVEPAw4WdgOq2mi2_PUpERgP_LjMSLXtaGsmGqiAmmjwQWGcXibuONRwCsyE86-sY9sY_JYeoi92a7M-RBUsoADLZTKuwfbicKMrekOKY-tHYy375HZhlIkS_dGDGBH1YiBCQeJftCWF2cn3ktV-KLm7Aim_RotZhew_qexqDtqfMjw1xJw",
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuA3C5m6FQrklsEZsD0_-hv6523OGPbc_KSfvxvtGl2md3pvdqIcVAYXPu_rd7iraP6PQSpi08UHkB3VaYcsqrFyN6NGH968zmwsrSa3Cz6o20NzKawhUZyIrn7xSSyXEtY95c0bZAZO98GjB531sjQided9qOcRlObwxKIe0EkkeRJXfiaTwPkPh1GbeylGz3vb-chiTJ-CvVoJpD0z-w4UdCWi0nDc99UL6DqDzHNQGN65Zx60lOLD7d2z7nM3wQx-_abGiAFe7RM",
-];
+
+const INSPECTOR_IMG = "https://lh3.googleusercontent.com/aida-public/AB6AXuBEO6SH4OsD-IJAe-WH8DrpwWT1-APwkY4KsKJmtwwz4cjlvaKtXHSerHtIRz42IlChyxVgEK4K_n2VRljeiorscCFq__I-Gi1RFo4CdM_pauuK3bAOilC9m_UEZ2xfddzU9Gd8j2SRldv3uvYY4nUduhBtFS5U5gJ-GL7LGSyVJ0DKS55TpTWYIttUV_yfWT3tJyrOj24LQzBlbpkdtwvCEuYFnQUS7PCdQMjygzN21bVgKHfG31MOucSHFOWsiOdyzXEjpops3kM";
 
 export default function DuelSimulator() {
     const { id: roomCode } = useParams<{ id: string }>();
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { user } = useAuth();
     const [room, setRoom] = useState<DuelRoom | null>(null);
     const [loading, setLoading] = useState(true);
+    const [deck, setDeck] = useState<string[]>([]);
+    const [hand, setHand] = useState<string[]>([]);
+    const [gy, setGy] = useState<string[]>([]);
+
+    interface FieldCard {
+        img: string;
+        isExtra: boolean;
+        position: 'atk' | 'def';
+    }
+    const [fieldCards, setFieldCards] = useState<Record<string, FieldCard | undefined>>({});
+    const [extraDeck, setExtraDeck] = useState<string[]>([]);
+    const [showExtraDeckModal, setShowExtraDeckModal] = useState(false);
+    const [placingCard, setPlacingCard] = useState<{ img: string, sourceId: string } | null>(null);
+    const slotHighlightClass = placingCard ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0a0a0c] cursor-pointer hover:bg-primary/20 transition-colors' : '';
+
+    const handleDragStart = (e: React.DragEvent, card: string, sourceId: string) => {
+        e.dataTransfer.setData('cardImg', card);
+        e.dataTransfer.setData('sourceId', sourceId);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // Allow drop
+    };
+
+    const handleDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        const cardImg = e.dataTransfer.getData('cardImg');
+        const sourceId = e.dataTransfer.getData('sourceId');
+        if (!cardImg) return;
+
+        if (sourceId.startsWith('hand-')) {
+            const handIndex = parseInt(sourceId.split('-')[1]);
+            setHand(prev => prev.filter((_, idx) => idx !== handIndex));
+            setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra: false, position: 'atk' } }));
+        } else if (sourceId.startsWith('extradeck-')) {
+            const extraIndex = parseInt(sourceId.split('-')[1]);
+            setExtraDeck(prev => prev.filter((_, idx) => idx !== extraIndex));
+            setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra: true, position: 'atk' } }));
+            setShowExtraDeckModal(false);
+        } else if (sourceId.startsWith('field-')) {
+            const actualSourceId = sourceId.replace('field-', '');
+            if (actualSourceId !== targetId) {
+                setFieldCards(prev => {
+                    const newField = { ...prev };
+                    const movingCard = newField[actualSourceId];
+                    if (movingCard) {
+                        newField[targetId] = { ...movingCard };
+                    } else {
+                        newField[targetId] = { img: cardImg, isExtra: false, position: 'atk' };
+                    }
+                    newField[actualSourceId] = undefined;
+                    return newField;
+                });
+            }
+        }
+    };
+
+    const handleSlotClick = (targetId: string) => {
+        if (!placingCard) return;
+        const { img: cardImg, sourceId } = placingCard;
+
+        let isExtra = false;
+        let position: 'atk' | 'def' = 'atk';
+
+        if (sourceId.startsWith('hand-')) {
+            const handIndex = parseInt(sourceId.split('-')[1]);
+            setHand(prev => prev.filter((_, idx) => idx !== handIndex));
+            isExtra = false;
+        } else if (sourceId.startsWith('extradeck-')) {
+            const extraIndex = parseInt(sourceId.split('-')[1]);
+            setExtraDeck(prev => prev.filter((_, idx) => idx !== extraIndex));
+            isExtra = true;
+        } else if (sourceId.startsWith('field-')) {
+            const actualSourceId = sourceId.replace('field-', '');
+            if (actualSourceId === targetId) {
+                setPlacingCard(null); // Cancel click on same slot
+                return;
+            }
+            if (fieldCards[actualSourceId]) {
+                isExtra = fieldCards[actualSourceId]!.isExtra;
+                position = fieldCards[actualSourceId]!.position;
+            }
+            setFieldCards(prev => {
+                const newField = { ...prev };
+                newField[actualSourceId] = undefined;
+                return newField;
+            });
+        }
+        setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra, position } }));
+        setPlacingCard(null);
+        setShowExtraDeckModal(false);
+    };
+
+    const handleCardAction = (slotId: string, action: 'atk' | 'def' | 'gy' | 'hand' | 'deck' | 'extradeck') => {
+        const card = fieldCards[slotId];
+        if (!card) return;
+
+        if (action === 'atk' || action === 'def') {
+            setFieldCards(prev => ({
+                ...prev,
+                [slotId]: { ...card, position: action }
+            }));
+            return;
+        }
+
+        // Move to somewhere else
+        setFieldCards(prev => {
+            const newField = { ...prev };
+            newField[slotId] = undefined;
+            return newField;
+        });
+
+        if (action === 'gy') {
+            setGy(prev => [...prev, card.img]);
+        } else if (action === 'hand') {
+            setHand(prev => [...prev, card.img]);
+        } else if (action === 'deck') {
+            setDeck(prev => [...prev, card.img]);
+        } else if (action === 'extradeck') {
+            setExtraDeck(prev => [...prev, card.img]);
+        }
+    };
+
+    const renderFieldSlot = (slotId: string, defaultLabel: React.ReactNode, extraClass?: string) => {
+        const card = fieldCards[slotId];
+        return (
+            <div
+                className={`card-slot rounded-lg overflow-hidden relative group ${extraClass || ''} ${slotHighlightClass}`}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, slotId)}
+                onClick={() => handleSlotClick(slotId)}
+            >
+                {card ? (
+                    <>
+                        <img
+                            src={card.img}
+                            alt="Card"
+                            className={`w-full h-full object-cover transition-transform duration-200 ${card.position === 'def' ? 'rotate-90 scale-[0.85]' : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, card.img, `field-${slotId}`)}
+                        />
+                        {/* Context Menu Overlay */}
+                        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 pointer-events-auto">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.position === 'atk' ? 'def' : 'atk'); }}
+                                className="text-[10px] w-full bg-white/10 hover:bg-white/30 text-white rounded py-[2px] mb-1 transition-colors font-bold uppercase"
+                            >
+                                Change {card.position === 'atk' ? 'DEF' : 'ATK'}
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'gy'); }}
+                                className="text-[10px] w-full bg-red-900/60 hover:bg-red-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
+                            >
+                                To GY
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.isExtra ? 'extradeck' : 'hand'); }}
+                                className="text-[10px] w-full bg-blue-900/60 hover:bg-blue-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
+                            >
+                                To {card.isExtra ? 'Extra' : 'Hand'}
+                            </button>
+                            {!card.isExtra && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'deck'); }}
+                                    className="text-[10px] w-full bg-amber-900/60 hover:bg-amber-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
+                                >
+                                    To Deck
+                                </button>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <div className="slot-label pointer-events-none">{defaultLabel}</div>
+                )}
+            </div>
+        );
+    };
+
+    useEffect(() => {
+        const deckId = searchParams.get('deckId');
+        if (!deckId) return;
+
+        // Fetch deck and initialize cards
+        fetch(`${API_BASE_URL}/api/deck/${deckId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.cards) {
+                    let mainImages: string[] = [];
+                    let extraImages: string[] = [];
+
+                    data.cards.forEach((c: any) => {
+                        const qty = c.quantity || 1;
+                        for (let i = 0; i < qty; i++) {
+                            if (c.imageUrl) {
+                                if (c.area === 'EXTRA') {
+                                    extraImages.push(c.imageUrl);
+                                } else if (c.area === 'MAIN') {
+                                    mainImages.push(c.imageUrl);
+                                }
+                            }
+                        }
+                    });
+
+                    // Shuffle main deck (Fisher-Yates)
+                    for (let i = mainImages.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [mainImages[i], mainImages[j]] = [mainImages[j], mainImages[i]];
+                    }
+
+                    // Draw 5 to hand
+                    setHand(mainImages.slice(0, 5));
+                    setDeck(mainImages.slice(5));
+                    setExtraDeck(extraImages);
+                }
+            })
+            .catch(err => console.error("Error fetching selected deck:", err));
+    }, [searchParams]);
 
     useEffect(() => {
         if (!roomCode) return;
-
-        // Initial room load (no auto-join here, just data)
         const loadRoom = async () => {
             const { data } = await supabase
                 .from('duel_rooms')
@@ -47,10 +258,8 @@ export default function DuelSimulator() {
             if (data) setRoom(data);
             setLoading(false);
         };
-
         loadRoom();
 
-        // Subscribe to this specific room's real-time changes
         const channel = supabase
             .channel(`room_${roomCode}`)
             .on(
@@ -70,12 +279,24 @@ export default function DuelSimulator() {
         return () => { supabase.removeChannel(channel); };
     }, [roomCode]);
 
-    // Separate effect: auto-join as opponent once user is known
+    useEffect(() => {
+        if (!room) return;
+        const subscription = supabase
+            .channel(`room:${room.id}`)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'duel_rooms', filter: `id=eq.${room.id}` }, (payload) => {
+                setRoom(payload.new as DuelRoom);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(subscription);
+        };
+    }, [room]);
+
+    // Auto-join as opponent
     useEffect(() => {
         if (!user || !room) return;
-        // Only run if this user is not the host and there is no opponent yet
         if (room.host_id === user.id || room.opponent_id) return;
-
         const doAutoJoin = async () => {
             const { data: updated } = await supabase
                 .from('duel_rooms')
@@ -88,21 +309,23 @@ export default function DuelSimulator() {
                 .eq('id', room.id)
                 .select()
                 .single();
-
             if (updated) setRoom(updated);
         };
-
         doAutoJoin();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, room?.id]);
 
     // Determine player roles
-    const isHost = user?.id === room?.host_id;
-    const myUsername = isHost ? room?.host_username : (room?.opponent_username || 'Waiting...');
-    const myAvatar = isHost ? room?.host_avatar : room?.opponent_avatar;
-    const opponentUsername = isHost ? (room?.opponent_username || 'Waiting for opponent…') : room?.host_username;
-    const opponentAvatar = isHost ? room?.opponent_avatar : room?.host_avatar;
-    const opponentName = opponentUsername || 'Waiting...';
+    const isPlayer1 = true; // For now, you are always player on bottom
+    const p1State = {
+        lp: 8000,
+        handCount: hand.length,
+        deckCount: deck.length,
+        gyCount: gy.length,
+        extraDeckCount: extraDeck.length,
+        username: user?.user_metadata?.username || user?.email?.split('@')[0] || 'You',
+        avatar: user?.user_metadata?.avatar_url || null,
+    };
 
     if (loading) {
         return (
@@ -129,225 +352,292 @@ export default function DuelSimulator() {
         );
     }
 
+    // Fan-spread rotation for hand cards
+
+
     return (
-        <div className="bg-background-dark font-display text-slate-100 h-screen overflow-hidden flex flex-col relative w-full">
+        <div className="h-screen overflow-hidden flex flex-col" style={{
+            backgroundColor: '#0a0a0c',
+            backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(127, 19, 236, 0.1), transparent), linear-gradient(rgba(127, 19, 236, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(127, 19, 236, 0.05) 1px, transparent 1px)',
+            backgroundSize: '100% 100%, 40px 40px, 40px 40px',
+            color: '#e2e8f0',
+            fontFamily: "'Space Grotesk', sans-serif"
+        }}>
+
+            {/* Waiting overlay */}
+            {room.status === 'waiting' && !room.opponent_id && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <div className="glassmorphism rounded-2xl p-8 text-center max-w-sm mx-auto">
+                        <span className="material-icons text-5xl text-[#7f13ec] animate-pulse mb-3">radar</span>
+                        <h2 className="text-xl font-bold mb-2">Waiting for opponent…</h2>
+                        <p className="text-white/60 text-sm mb-4">Share your room code!</p>
+                        <div className="bg-black/40 border border-[#7f13ec]/30 rounded-lg px-4 py-3 font-mono text-[#7f13ec] text-lg font-bold mb-4">{room.room_code}</div>
+                        <button onClick={() => navigator.clipboard.writeText(room.room_code)} className="text-xs text-white/40 hover:text-white transition-colors flex items-center gap-1 mx-auto">
+                            <span className="material-icons text-sm">content_copy</span> Copy to clipboard
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ HEADER ═══ */}
+            <header className="p-4 flex justify-between items-center glassmorphism z-40 border-b border-[#7f13ec]/20 shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#7f13ec] rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(127,19,236,0.5)]">
+                        <span className="text-white font-bold text-xl">S</span>
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tighter text-white">SolemnStats</h1>
+                </div>
+                {/* Turn Tracker */}
+                <div className="absolute left-1/2 -translate-x-1/2 px-8 py-2 glassmorphism rounded-full border border-[#00f2ff]/30 flex items-center gap-4">
+                    <span className="text-[#00f2ff] font-bold animate-pulse">YOUR TURN</span>
+                    <div className="h-4 w-[1px] bg-white/20"></div>
+                    <span className="text-white/60 text-sm">TURN 03</span>
+                </div>
+                <div className="flex items-center gap-6">
+                    <div className="text-right">
+                        <p className="text-xs text-white/40 uppercase">Connection</p>
+                        <p className="text-green-400 font-mono text-sm">STABLE: 24ms</p>
+                    </div>
+                    <button className="bg-[#7f13ec]/20 hover:bg-[#7f13ec]/40 border border-[#7f13ec]/50 px-4 py-2 rounded-lg text-sm font-medium transition-all">Settings</button>
+                </div>
+            </header>
+
+            {/* ═══ MAIN: Left Panel + Duel Field + Right Panel ═══ */}
             <main className="flex-1 flex overflow-hidden relative">
-                {/* Sidebar: Card Preview & Duel Log */}
-                <aside className="w-80 border-r border-primary/20 flex flex-col bg-background-dark/40 backdrop-blur-sm z-10 shrink-0">
-                    <div className="p-4 flex-1 overflow-y-auto space-y-4">
-                        {/* Card Preview Card */}
-                        <div className="glass-panel rounded-xl overflow-hidden">
-                            <div className="aspect-[3/4] bg-cover relative" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAwSinl0hjQkWMGcR6GKZGGPlz5R-uImRsKNF29nMzTy5MrhSGucMefpEfOonQdDWDVfZQ9W2V1pIyRI2nbySIxsNgZq-oKR44nAZRVA733KhdU8iuJMChkWAIoZN7lsGjsXmlKDAVKZ6i-tG3M-p-ZONSwniOuxkOHWaxZYzWYxfoauxRpl6lbECEpiHd27NkB06s9s2T37lgmGJy_ere5AOqqlMR7QtwqYHcpZupJH6NG24Lb8LR0cuGx3mMuQCUuRh1VqDSRfaQ')" }}>
-                                <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black to-transparent">
-                                    <h3 className="font-bold text-accent-gold">Solemn Judgment Dragon</h3>
-                                    <div className="flex gap-2 text-xs font-bold">
-                                        <span className="bg-primary/80 px-1 rounded">LV 8</span>
-                                        <span className="bg-background-dark/80 px-1 rounded">ATK 3000 / DEF 2600</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-3 text-xs leading-relaxed text-slate-300">
-                                [Dragon / Effect] Cannot be Normal Summoned/Set. Must be Special Summoned (from your hand) by having exactly 3 LIGHT monsters in your GY...
-                            </div>
-                        </div>
 
-                        {/* Room Info */}
-                        <div className="glass-panel rounded-xl p-3 text-xs space-y-2">
-                            <div className="text-primary font-bold tracking-wider uppercase text-[10px] flex items-center gap-2">
-                                <span className="material-icons text-sm">meeting_room</span> Room Info
-                            </div>
-                            <div className="flex justify-between"><span className="text-slate-500">Code:</span><span className="font-mono text-slate-300">{room.room_code}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-500">Format:</span><span className="text-slate-300">{room.format}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-500">Type:</span><span className="text-slate-300">{room.type}</span></div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-500">Status:</span>
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 ${room.status === 'in_progress' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                                    {room.status === 'in_progress' ? (
-                                        <><span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></span> LIVE</>
-                                    ) : (
-                                        <><span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span> Waiting</>
-                                    )}
-                                </span>
-                            </div>
+                {/* ── LEFT PANEL: Status / Resources ── */}
+                <aside className="w-72 p-6 flex flex-col gap-6 glassmorphism border-r border-[#7f13ec]/10 shrink-0">
+                    {/* Opponent LP */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-end">
+                            <span className="text-white/60 text-xs uppercase font-bold tracking-widest">Opponent</span>
+                            <span className="text-2xl font-bold text-white tracking-tighter">8000 <span className="text-xs text-white/40">LP</span></span>
                         </div>
+                        <div className="lp-bar"><div className="lp-fill"></div></div>
+                        <div className="flex gap-2 pt-2">
+                            <div className="w-8 h-4 bg-white/10 rounded flex items-center justify-center text-[10px]">H: 5</div>
+                            <div className="w-8 h-4 bg-white/10 rounded flex items-center justify-center text-[10px]">D: 35</div>
+                        </div>
+                    </div>
 
-                        {/* Duel Log */}
-                        <div className="space-y-2">
-                            <h4 className="text-xs font-bold text-primary flex items-center gap-2">
-                                <span className="material-icons text-sm">history</span> DUEL HISTORY
-                            </h4>
-                            <div className="space-y-2 text-[11px] font-mono">
-                                <div className="p-2 border-l-2 border-primary/40 bg-primary/5">
-                                    <span className="text-primary font-bold">Turn 5:</span> Player 2 Normal Summons "Effect Veiler".
-                                </div>
-                                <div className="p-2 border-l-2 border-slate-700 bg-slate-900/40">
-                                    <span className="text-slate-400 font-bold">Turn 5:</span> Player 2 activates Effect of "Lumina".
-                                </div>
-                                <div className="p-2 border-l-2 border-accent-gold/40 bg-accent-gold/5">
-                                    <span className="text-accent-gold font-bold">Turn 4:</span> Player 1 inflicts 2000 damage to Player 2.
-                                </div>
+                    {/* Duel Log */}
+                    <div className="flex-1 flex flex-col min-h-0">
+                        <h3 className="text-xs font-bold text-[#00f2ff] uppercase mb-3 tracking-widest flex items-center gap-2">
+                            <span className="w-2 h-2 bg-[#00f2ff] rounded-full animate-ping"></span>
+                            Duel Log
+                        </h3>
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                            <div className="p-2 bg-white/5 border-l-2 border-[#7f13ec] rounded-r text-xs">
+                                <span className="text-white/40">[Turn 01]</span> Opponent normal summoned "Blue-Eyes White Dragon".
+                            </div>
+                            <div className="p-2 bg-white/5 border-l-2 border-[#00f2ff] rounded-r text-xs">
+                                <span className="text-white/40">[Turn 02]</span> You activated "Pot of Greed". Drew 2 cards.
+                            </div>
+                            <div className="p-2 bg-white/5 border-l-2 border-[#7f13ec] rounded-r text-xs">
+                                <span className="text-white/40">[Turn 02]</span> Opponent set 1 card to Spell/Trap zone.
+                            </div>
+                            <div className="p-2 bg-white/5 border-l-2 border-[#00f2ff] rounded-r text-xs">
+                                <span className="text-white/40">[Turn 03]</span> Draw Phase: You drew "Forbidden Droplet".
                             </div>
                         </div>
                     </div>
 
-                    {/* Deck Controls */}
-                    <div className="p-4 border-t border-primary/20 space-y-3">
-                        <button className="w-full py-2 bg-primary text-white rounded-lg font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110">ACTIVATE EFFECT</button>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button className="py-2 bg-slate-800 text-slate-100 rounded-lg text-xs font-bold border border-slate-700 hover:bg-slate-700">ATTACK</button>
-                            <button className="py-2 bg-slate-800 text-slate-100 rounded-lg text-xs font-bold border border-slate-700 hover:bg-slate-700">POSITION</button>
+                    {/* Player LP */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-end">
+                            <span className="text-[#00f2ff] text-xs uppercase font-bold tracking-widest">You</span>
+                            <span className="text-2xl font-bold text-white tracking-tighter">8000 <span className="text-xs text-white/40">LP</span></span>
                         </div>
+                        <div className="lp-bar"><div className="lp-fill"></div></div>
                     </div>
                 </aside>
 
-                {/* Duel Field Area */}
-                <div className="flex-1 flex flex-col bg-background-dark relative overflow-hidden">
-                    {/* Background */}
-                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "radial-gradient(#7f13ec 1px, transparent 1px)", backgroundSize: "40px 40px" }}></div>
+                {/* ── CENTER: Duel Field ── */}
+                <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden min-h-0">
+                    {/* 7-col × 5-row field grid */}
+                    <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center">
 
-                    {/* Waiting overlay */}
-                    {room.status === 'waiting' && !room.opponent_id && (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center">
-                            <div className="glass-panel rounded-2xl p-8 border border-primary/40 text-center max-w-sm mx-auto shadow-2xl shadow-primary/20">
-                                <span className="material-icons text-5xl text-primary animate-pulse mb-3">radar</span>
-                                <h2 className="text-xl font-bold mb-2">Waiting for opponent…</h2>
-                                <p className="text-slate-400 text-sm mb-4">Share your room code!</p>
-                                <div className="bg-slate-900 border border-primary/30 rounded-lg px-4 py-3 font-mono text-primary text-lg font-bold mb-4">{room.room_code}</div>
-                                <button onClick={() => navigator.clipboard.writeText(room.room_code)} className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 mx-auto">
-                                    <span className="material-icons text-sm">content_copy</span> Copy to clipboard
-                                </button>
+                        {/* ROW 1: Opponent Backrow */}
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                            <div className="slot-label text-white/50">Deck</div>
+                        </div>
+                        <div className="card-slot rounded-lg border-[#00f2ff]/40">
+                            <div className="slot-label text-[#00f2ff]">P-Zone</div>
+                        </div>
+                        {[0, 1, 2].map(i => (
+                            <div key={`opp-st-${i}`} className="card-slot rounded-lg">
+                                <div className="slot-label">S/T</div>
                             </div>
+                        ))}
+                        <div className="card-slot rounded-lg border-[#00f2ff]/40">
+                            <div className="slot-label text-[#00f2ff]">P-Zone</div>
+                        </div>
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                            <div className="slot-label text-white/50">Extra</div>
+                        </div>
+
+                        {/* ROW 2: Opponent Monsters */}
+                        <div className="card-slot rounded-lg border-[#7f13ec]/20">
+                            <div className="slot-label">GY</div>
+                        </div>
+                        {[0, 1, 2, 3, 4].map(i => (
+                            <div key={`opp-mon-${i}`} className="card-slot rounded-lg">
+                                <div className="slot-label">Monster</div>
+                            </div>
+                        ))}
+                        <div className="card-slot rounded-lg">
+                            <div className="slot-label">Field</div>
+                        </div>
+
+                        {/* ROW 3: Extra Monster Zones */}
+                        <div className="col-span-2"></div>
+                        {renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
+                        <div className="col-start-4"></div>
+                        {renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
+                        <div className="col-span-2"></div>
+
+                        {/* ROW 4: Player Monsters */}
+                        {renderFieldSlot('pl-field', 'Field')}
+                        {[0, 1, 2, 3, 4].map(i => renderFieldSlot(`pl-mon-${i}`, 'Monster'))}
+                        <div className="card-slot rounded-lg border-[#7f13ec]/20 relative">
+                            <div className="absolute top-1 right-2 text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20">{gy.length}</div>
+                            <div className="slot-label">GY</div>
+                        </div>
+
+                        {/* ROW 5: Player Backrow */}
+                        <div
+                            className={`card-slot rounded-lg bg-gradient-to-br from-[#a6a9b0] to-[#60656e] shadow-[inset_0_0_20px_rgba(0,0,0,0.3)] border-none relative group cursor-pointer hover:scale-105 transition-transform ${placingCard && placingCard.sourceId.startsWith('extradeck-') ? 'ring-2 ring-primary ring-offset-2 ring-offset-black' : ''}`}
+                            onClick={() => {
+                                if (extraDeck.length > 0 && !placingCard) {
+                                    setShowExtraDeckModal(true);
+                                } else if (placingCard) {
+                                    if (placingCard.sourceId.startsWith('extradeck-')) {
+                                        setPlacingCard(null); // Cancel
+                                    }
+                                }
+                            }}
+                        >
+                            <div className="absolute top-1 right-2 text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20">{extraDeck.length}</div>
+                            <div className="slot-label text-white/50 mix-blend-overlay">Extra</div>
+                        </div>
+                        {renderFieldSlot('pl-pz-left', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
+                        {[0, 1, 2].map(i => renderFieldSlot(`pl-st-${i}`, 'S/T'))}
+                        {renderFieldSlot('pl-pz-right', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
+                        {/* Player Deck - Interactive drawing */}
+                        <div
+                            className="card-slot rounded-lg bg-gradient-to-br from-[#efcc99] to-[#bf854b] shadow-[inset_0_0_20px_rgba(0,0,0,0.3)] border-none relative group cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => {
+                                if (deck.length > 0) {
+                                    setHand([...hand, deck[0]]);
+                                    setDeck(deck.slice(1));
+                                }
+                            }}
+                        >
+                            <div className="absolute top-1 right-2 text-xs font-bold text-amber-900 border border-amber-900/40 rounded px-1 bg-white/20">{deck.length}</div>
+                            <div className="slot-label text-amber-900 font-bold mix-blend-overlay">Deck</div>
+                        </div>
+                    </div>
+
+                    {/* Action Overlay (Bottom Right) */}
+                    <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20 w-48">
+                        <button className="bg-[#7f13ec] hover:bg-white hover:text-[#7f13ec] px-4 py-3 rounded-md font-bold shadow-lg transition-all text-sm uppercase tracking-tighter">Attack</button>
+                        <button className="glassmorphism hover:bg-[#00f2ff] hover:text-black px-4 py-3 rounded-md font-bold border border-[#00f2ff]/50 transition-all text-sm uppercase tracking-tighter">Activate Effect</button>
+                        <button className="glassmorphism hover:bg-white/10 px-4 py-3 rounded-md font-bold border border-white/20 transition-all text-sm uppercase tracking-tighter">Set / Position</button>
+                        <button className="bg-red-900/60 hover:bg-red-600 px-4 py-3 rounded-md font-bold border border-red-500/50 transition-all text-sm uppercase tracking-tighter mt-2">End Phase</button>
+                    </div>
+                </div>
+
+                {/* ── RIGHT PANEL: Card Inspector ── */}
+                <aside className="w-80 p-6 glassmorphism border-l border-[#7f13ec]/10 flex flex-col gap-4 shrink-0">
+                    <div className="aspect-[2/3] w-full bg-black/40 rounded-lg border border-[#7f13ec]/40 relative group overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
+                        <img className="w-full h-full object-cover" src={INSPECTOR_IMG} alt="Card Inspector" />
+                        <div className="absolute bottom-4 left-4 right-4">
+                            <p className="text-[#00f2ff] font-bold text-sm">Forbidden Droplet</p>
+                            <p className="text-xs text-white/60">Quick-Play Spell</p>
+                        </div>
+                    </div>
+                    <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
+                        <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-[#00f2ff]/20 text-[#00f2ff] text-[10px] rounded border border-[#00f2ff]/40 uppercase font-bold">Quick-Play</span>
+                            <span className="px-2 py-0.5 bg-white/10 text-white/60 text-[10px] rounded border border-white/10 uppercase font-bold">ROTD-EN065</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-white/80">
+                            Send any number of other cards from your hand and/or field to the GY; choose that many Effect Monsters your opponent controls, and until the end of this turn, their ATK is halved, also their effects are negated. In response to this card's activation, your opponent cannot activate cards, or the effects of cards, with the same original type (Monster/Spell/Trap) as the cards sent to the GY to activate this card.
+                        </p>
+                    </div>
+                </aside>
+            </main >
+
+            {/* ═══ FOOTER: Hand Display ═══ */}
+            < footer className="h-40 glassmorphism border-t border-[#7f13ec]/30 flex items-center justify-center relative overflow-visible z-40 shrink-0" >
+                <div className="player-hand-container flex -space-x-10 pb-8">
+                    {hand.map((img, i) => {
+                        // Dynamically calculate fan spread rotation based on hand size
+                        const total = hand.length;
+                        const maxRot = 15;
+                        const rotStep = total > 1 ? (maxRot * 2) / (total - 1) : 0;
+                        const rotation = total > 1 ? -maxRot + (rotStep * i) : 0;
+                        const yOffset = total > 1 ? Math.abs(i - (total - 1) / 2) * Math.abs(i - (total - 1) / 2) * 2 : 0;
+
+                        return (
+                            <div
+                                key={i}
+                                className={`hand-card flex flex-col items-center justify-center p-1 cursor-pointer transition-transform hover:-translate-y-4`}
+                                style={{
+                                    transform: `rotate(${rotation}deg) translateY(${yOffset}px)`,
+                                    ...(i === hand.length - 1 ? { borderColor: 'rgba(0, 242, 255, 0.6)', boxShadow: '0 0 20px rgba(0,242,255,0.3)' } : {})
+                                }}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, img, `hand-${i}`)}
+                                onClick={() => setPlacingCard({ img, sourceId: `hand-${i}` })}
+                            >
+                                <img className={`w-full h-full object-cover rounded pointer-events-none transition-all ${placingCard?.sourceId === `hand-${i}` ? 'ring-4 ring-primary ring-opacity-100 ring-offset-2' : ''}`} src={img} alt={`Hand card ${i + 1}`} />
+                            </div>
+                        );
+                    })}
+                </div>
+            </footer >
+            <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showExtraDeckModal ? 'visible' : 'invisible'}`}>
+                <div
+                    className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showExtraDeckModal ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={() => setShowExtraDeckModal(false)}
+                ></div>
+                <div
+                    className={`bg-[#0a0a0c] border border-[#7f13ec]/30 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative transition-all ${showExtraDeckModal ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white uppercase italic flex items-center gap-2"><span className="material-icons text-[#7f13ec]">style</span> Extra Deck</h2>
+                        <button onClick={() => setShowExtraDeckModal(false)} className="text-slate-400 hover:text-white transition-colors"><span className="material-icons">close</span></button>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4 overflow-y-auto max-h-[60vh] p-4 custom-scrollbar">
+                        {extraDeck.map((img, idx) => (
+                            <div key={idx} className="relative group cursor-pointer hover:-translate-y-2 transition-transform">
+                                <img
+                                    src={img}
+                                    alt={`Extra Deck ${idx}`}
+                                    className={`w-full h-auto rounded-lg shadow-lg border-2 ${placingCard?.sourceId === `extradeck-${idx}` ? 'border-[#7f13ec] shadow-[0_0_15px_rgba(127,19,236,0.6)]' : 'border-transparent'}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        handleDragStart(e, img, `extradeck-${idx}`);
+                                        setShowExtraDeckModal(false);
+                                    }}
+                                    onClick={() => {
+                                        setPlacingCard({ img, sourceId: `extradeck-${idx}` });
+                                        setShowExtraDeckModal(false); // Close immediately so they can see field
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {extraDeck.length === 0 && (
+                        <div className="text-center text-slate-500 py-12">
+                            <span className="material-icons text-5xl opacity-30 mb-2">style</span>
+                            <p className="font-bold">No cards in Extra Deck</p>
                         </div>
                     )}
-
-                    {/* ── OPPONENT HUD ── */}
-                    <div className="px-4 py-1 flex justify-between items-center z-10 shrink-0 border-b border-white/5">
-                        <div className="flex items-center gap-2">
-                            <img src={opponentAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(opponentName)}&background=4b0082&color=ffffff&bold=true&size=128`} alt={opponentName} className="w-7 h-7 rounded-full border-2 border-red-500/50 object-cover" />
-                            <div>
-                                <p className="text-[8px] text-slate-500 font-bold tracking-widest uppercase leading-none">Opponent</p>
-                                <h2 className={`text-sm font-bold leading-tight ${!room.opponent_id ? 'text-slate-600 italic' : 'text-slate-200'}`}>{opponentName}</h2>
-                            </div>
-                            <div className="glass-panel px-2 py-0.5 rounded border-l-2 border-l-red-500 ml-1">
-                                <span className="text-[7px] text-slate-400 block leading-none">LP</span>
-                                <span className="text-base font-bold text-white leading-tight">8000</span>
-                            </div>
-                        </div>
-                        <div className="text-[8px] text-slate-700 font-mono">{room.room_code}</div>
-                    </div>
-
-                    {/* ── OPPONENT HAND ── */}
-                    <div className="shrink-0 flex justify-center items-end gap-0.5 px-4 h-12 py-1 z-10">
-                        {[0, 1, 2, 3, 4, 5, 6].map(i => (
-                            <div key={i} className="h-full aspect-[3/4] bg-primary/10 border border-primary/20 rounded shadow" style={{ transform: `rotate(${(i - 3) * 2}deg)` }}></div>
-                        ))}
-                    </div>
-
-                    {/* ── 4 ZONE ROWS + PHASE BAR ── */}
-                    <div className="flex-1 flex flex-col justify-center gap-1 px-2 z-10 overflow-hidden">
-
-                        {/* Row 1 — Opponent Spell/Trap */}
-                        <div className="h-[70px] shrink-0 grid grid-cols-7 gap-1">
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-green-500/30 bg-green-500/5">
-                                <span className="text-[6px] font-black text-green-400/50 uppercase rotate-[-90deg] whitespace-nowrap">Field</span>
-                            </div>
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className="card-slot rounded h-full"></div>)}
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-slate-500/30">
-                                <span className="text-[6px] font-black text-slate-500/60 uppercase">GY</span>
-                            </div>
-                        </div>
-
-                        {/* Row 2 — Opponent Monster */}
-                        <div className="h-[70px] shrink-0 grid grid-cols-7 gap-1">
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-blue-500/30 bg-blue-500/5">
-                                <span className="text-[6px] font-black text-blue-400/40 uppercase">EMZ</span>
-                            </div>
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className="card-slot rounded h-full"></div>)}
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-primary/30 bg-primary/5">
-                                <span className="text-[6px] font-black text-primary/40 uppercase">EX</span>
-                            </div>
-                        </div>
-
-                        {/* Phase Bar */}
-                        <div className="shrink-0 glass-panel flex items-center rounded-full border-primary/20 relative py-1 my-0.5">
-                            <div className="flex gap-3 mx-auto text-[9px] font-black tracking-widest uppercase items-center relative z-10 justify-center">
-                                {['Draw', 'Standby', 'Main 1', 'Battle', 'Main 2', 'End'].map((phase, i) => (
-                                    <span key={phase} className={i === 2 ? 'text-primary border border-primary/50 px-2 py-0.5 rounded-full text-[8px]' : 'text-slate-500 hover:text-primary cursor-pointer transition-colors text-[8px]'}>{phase}</span>
-                                ))}
-                            </div>
-                            <button className="absolute right-3 bg-primary px-3 py-0.5 rounded-full text-[8px] font-black text-white hover:brightness-125 uppercase shadow-[0_0_12px_rgba(127,19,236,0.5)]">END TURN</button>
-                        </div>
-
-                        {/* Row 3 — Player Monster */}
-                        <div className="h-[70px] shrink-0 grid grid-cols-7 gap-1">
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-blue-500/30 bg-blue-500/5">
-                                <span className="text-[6px] font-black text-blue-400/40 uppercase">EMZ</span>
-                            </div>
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className={`card-slot rounded h-full ${i === 2 ? 'neon-pulse border-solid border-primary/80' : ''}`}></div>)}
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-primary/30 bg-primary/5">
-                                <span className="text-[6px] font-black text-primary/40 uppercase">EX</span>
-                            </div>
-                        </div>
-
-                        {/* Row 4 — Player Spell/Trap */}
-                        <div className="h-[70px] shrink-0 grid grid-cols-7 gap-1">
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-green-500/30 bg-green-500/5">
-                                <span className="text-[6px] font-black text-green-400/50 uppercase rotate-[-90deg] whitespace-nowrap">Field</span>
-                            </div>
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className="card-slot rounded h-full"></div>)}
-                            <div className="card-slot rounded h-full flex items-center justify-center border-dashed border-slate-500/30">
-                                <span className="text-[6px] font-black text-slate-500/60 uppercase">GY</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── PLAYER HAND ── */}
-                    <div className="shrink-0 flex justify-center items-center gap-0.5 px-4 h-14 py-1 z-10">
-                        {HAND_CARD_IMAGES.map((img, i) => (
-                            <div key={i} className="h-full aspect-[3/4] bg-cover border border-primary/30 rounded shadow-xl hover:-translate-y-4 transition-all duration-200 cursor-pointer relative hover:scale-110 hover:z-50" style={{ backgroundImage: `url('${img}')`, zIndex: i + 1 }}></div>
-                        ))}
-                    </div>
-
-                    {/* ── PLAYER HUD ── */}
-                    <div className="px-4 py-1 flex justify-between items-center z-20 shrink-0 border-t border-white/5">
-                        <div className="flex items-center gap-2">
-                            <div className="glass-panel px-2 py-0.5 rounded border-l-2 border-l-primary">
-                                <span className="text-[7px] text-slate-400 block leading-none">LP</span>
-                                <span className="text-base font-bold text-white leading-tight">8000</span>
-                            </div>
-                            <img src={myAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(myUsername || '')}&background=4b0082&color=ffffff&bold=true&size=128`} alt={myUsername || ''} className="w-7 h-7 rounded-full border-2 border-primary/60 object-cover" />
-                            <div>
-                                <p className="text-[8px] text-primary font-bold tracking-widest uppercase leading-none">You</p>
-                                <h2 className="text-sm font-bold text-slate-200 leading-tight">{myUsername}</h2>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase">{room.format} · {room.type}</span>
-                            <button onClick={() => navigate('/lobby')} className="text-[8px] text-slate-500 hover:text-primary transition-colors flex items-center gap-0.5 font-bold uppercase tracking-wider">
-                                <span className="material-icons text-xs">arrow_back</span> Lobby
-                            </button>
-                        </div>
-                    </div>
                 </div>
-            </main>
-
-
-            {/* Footer */}
-            <footer className="bg-background-dark border-t border-primary/10 px-6 py-2 flex justify-between items-center text-[10px] font-medium tracking-wider text-slate-500 uppercase z-20 shrink-0">
-                <div className="flex gap-6">
-                    <span>Room: {room.room_code}</span>
-                    <span>Format: {room.format}</span>
-                </div>
-                <div className="flex gap-4 text-primary">
-                    <span className="flex items-center gap-1">
-                        <span className="material-icons text-sm">group</span>
-                        {room.spectators} Spectators
-                    </span>
-                    <button onClick={() => navigate('/lobby')} className="flex items-center gap-1 text-slate-500 hover:text-primary transition-colors">
-                        <span className="material-icons text-sm">arrow_back</span> Lobby
-                    </button>
-                </div>
-            </footer>
-        </div>
+            </div>
+        </div >
     );
 }
