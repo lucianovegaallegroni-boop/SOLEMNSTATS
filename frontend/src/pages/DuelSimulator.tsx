@@ -224,9 +224,11 @@ export default function DuelSimulator() {
 
     const renderFieldSlot = (slotId: string, defaultLabel: React.ReactNode, extraClass?: string) => {
         const card = fieldCards[slotId];
+        const isMonsterZone = slotId.includes('mon') || slotId.includes('emz');
+
         return (
             <div
-                className={`card-slot rounded-lg overflow-hidden relative group transition-transform ${extraClass || ''} ${slotHighlightClass}`}
+                className={`card-slot rounded-lg relative group transition-transform ${extraClass || ''} ${slotHighlightClass}`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, slotId)}
                 onClick={() => handleSlotClick(slotId)}
@@ -237,18 +239,20 @@ export default function DuelSimulator() {
                         <img
                             src={card.img}
                             alt="Card"
-                            className={`w-full h-full object-cover transition-transform duration-200 ${card.position === 'def' ? 'rotate-90 scale-[0.85]' : ''}`}
+                            className={`w-full h-full object-cover transition-transform duration-200 ${card.position === 'def' ? 'rotate-90 scale-[0.85]' : ''} rounded`}
                             draggable
                             onDragStart={(e) => handleDragStart(e, card.img, `field-${slotId}`)}
                         />
                         {/* Context Menu Overlay (Spawns Upwards) */}
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-28 bg-[#0a0a0c]/95 border border-[#1b0726] shadow-2xl p-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-auto rounded">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.position === 'atk' ? 'def' : 'atk'); }}
-                                className="text-[10px] w-full bg-white/10 hover:bg-white/30 text-white rounded py-[4px] mb-1 transition-colors font-bold uppercase block text-center"
-                            >
-                                Change {card.position === 'atk' ? 'DEF' : 'ATK'}
-                            </button>
+                            {isMonsterZone && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.position === 'atk' ? 'def' : 'atk'); }}
+                                    className="text-[10px] w-full bg-white/10 hover:bg-white/30 text-white rounded py-[4px] mb-1 transition-colors font-bold uppercase block text-center"
+                                >
+                                    Change {card.position === 'atk' ? 'DEF' : 'ATK'}
+                                </button>
+                            )}
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'gy'); }}
                                 className="text-[10px] w-full bg-red-900/60 hover:bg-red-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
@@ -256,17 +260,19 @@ export default function DuelSimulator() {
                                 To GY
                             </button>
                             <button
-                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'hand'); }}
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.isExtra ? 'extradeck' : 'hand'); }}
                                 className="text-[10px] w-full bg-blue-900/60 hover:bg-blue-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
                             >
-                                To Hand
+                                To {card.isExtra ? 'Extra' : 'Hand'}
                             </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'deck'); }}
-                                className="text-[10px] w-full bg-amber-900/60 hover:bg-amber-500 text-white rounded py-[4px] transition-colors uppercase font-bold block text-center"
-                            >
-                                To Deck
-                            </button>
+                            {!card.isExtra && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'deck'); }}
+                                    className="text-[10px] w-full bg-amber-900/60 hover:bg-amber-500 text-white rounded py-[4px] transition-colors uppercase font-bold block text-center"
+                                >
+                                    To Deck
+                                </button>
+                            )}
                         </div>
                     </>
                 ) : (
