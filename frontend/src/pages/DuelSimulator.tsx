@@ -46,6 +46,33 @@ export default function DuelSimulator() {
     const slotHighlightClass = placingCard ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0a0a0c] cursor-pointer hover:bg-primary/20 transition-colors' : '';
 
     const channelRef = useRef<any>(null);
+    const cardCache = useRef<Record<string, any>>({});
+    const [hoveredCardDetails, setHoveredCardDetails] = useState<any>(null);
+
+    const handleCardHover = async (imgUrl: string | undefined) => {
+        if (!imgUrl || imgUrl.includes('card-back') || imgUrl.startsWith('data:')) return;
+
+        const idMatch = imgUrl.match(/\/(\d+)\.jpg$/);
+        if (!idMatch) return;
+
+        const cardId = idMatch[1];
+        if (cardCache.current[cardId]) {
+            setHoveredCardDetails(cardCache.current[cardId]);
+            return;
+        }
+
+        try {
+            const res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${cardId}`);
+            const data = await res.json();
+            if (data && data.data && data.data.length > 0) {
+                cardCache.current[cardId] = data.data[0];
+                setHoveredCardDetails(data.data[0]);
+            }
+        } catch (err) {
+            console.error("Failed to fetch card info", err);
+        }
+    };
+
     const [oppState, setOppState] = useState({
         lp: 8000,
         deckSize: 0,
@@ -221,7 +248,10 @@ export default function DuelSimulator() {
     const renderOpponentSlot = (slotId: string, defaultLabel: React.ReactNode, extraClass?: string) => {
         const card = oppState.fieldCards[slotId];
         return (
-            <div className={`card-slot rounded-lg overflow-hidden relative ${extraClass || ''}`}>
+            <div
+                className={`card-slot rounded-lg overflow-hidden relative ${extraClass || ''}`}
+                onMouseEnter={() => handleCardHover(card?.img)}
+            >
                 {card ? (
                     <img
                         src={card.img}
@@ -437,6 +467,14 @@ export default function DuelSimulator() {
 
                 {/* ── LEFT PANEL: Status / Resources ── */}
                 <aside className="w-72 p-6 flex flex-col gap-6 glassmorphism border-r border-[#7f13ec]/10 shrink-0">
+
+                    {/* Turn Tracker */}
+                    <div className="w-full py-2 bg-black/40 rounded-lg border border-[#00f2ff]/30 flex flex-col items-center justify-center gap-1 shadow-lg shrink-0">
+                        <span className="text-[#00f2ff] font-bold animate-pulse tracking-widest text-sm">YOUR TURN</span>
+                        <div className="w-1/2 h-[1px] bg-[#00f2ff]/20"></div>
+                        <span className="text-white/60 text-[10px] tracking-widest">TURN 03</span>
+                    </div>
+
                     {/* Opponent Info & LP */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-3 bg-black/40 p-2 rounded-lg border border-white/5">
@@ -526,15 +564,8 @@ export default function DuelSimulator() {
                         })}
                     </div>
 
-                    {/* Turn Tracker (Moved from header) */}
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 px-8 py-2 glassmorphism rounded-full border border-[#00f2ff]/30 flex items-center gap-4 z-10 shadow-lg">
-                        <span className="text-[#00f2ff] font-bold animate-pulse">YOUR TURN</span>
-                        <div className="h-4 w-[1px] bg-white/20"></div>
-                        <span className="text-white/60 text-sm">TURN 03</span>
-                    </div>
-
                     {/* 7-col × 5-row field grid */}
-                    <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center mt-8">
+                    <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center mt-24">
 
                         {/* ROW 1: Opponent Backrow */}
                         <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
@@ -611,36 +642,37 @@ export default function DuelSimulator() {
                             <div className="slot-label text-amber-900 font-bold mix-blend-overlay">Deck</div>
                         </div>
                     </div>
-
-                    {/* Action Overlay (Bottom Right) */}
-                    <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20 w-48">
-                        <button className="bg-[#7f13ec] hover:bg-white hover:text-[#7f13ec] px-4 py-3 rounded-md font-bold shadow-lg transition-all text-sm uppercase tracking-tighter">Attack</button>
-                        <button className="glassmorphism hover:bg-[#00f2ff] hover:text-black px-4 py-3 rounded-md font-bold border border-[#00f2ff]/50 transition-all text-sm uppercase tracking-tighter">Activate Effect</button>
-                        <button className="glassmorphism hover:bg-white/10 px-4 py-3 rounded-md font-bold border border-white/20 transition-all text-sm uppercase tracking-tighter">Set / Position</button>
-                        <button className="bg-red-900/60 hover:bg-red-600 px-4 py-3 rounded-md font-bold border border-red-500/50 transition-all text-sm uppercase tracking-tighter mt-2">End Phase</button>
-                    </div>
                 </div>
 
                 {/* ── RIGHT PANEL: Card Inspector ── */}
                 <aside className="w-80 p-6 glassmorphism border-l border-[#7f13ec]/10 flex flex-col gap-4 shrink-0">
                     <div className="aspect-[2/3] w-full bg-black/40 rounded-lg border border-[#7f13ec]/40 relative group overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
-                        <img className="w-full h-full object-cover" src={INSPECTOR_IMG} alt="Card Inspector" />
-                        <div className="absolute bottom-4 left-4 right-4">
-                            <p className="text-[#00f2ff] font-bold text-sm">Forbidden Droplet</p>
-                            <p className="text-xs text-white/60">Quick-Play Spell</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 z-10"></div>
+                        <img className="w-full h-full object-cover relative z-0" src={hoveredCardDetails?.card_images[0]?.image_url || INSPECTOR_IMG} alt="Card Inspector" />
+                        <div className="absolute bottom-4 left-4 right-4 z-20">
+                            <p className="text-[#00f2ff] font-bold text-sm leading-tight">{hoveredCardDetails?.name || 'Hover a card'}</p>
+                            <p className="text-xs text-white/60">{hoveredCardDetails?.type || 'No card selected'}</p>
                         </div>
                     </div>
                     <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
-                        <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-[#00f2ff]/20 text-[#00f2ff] text-[10px] rounded border border-[#00f2ff]/40 uppercase font-bold">Quick-Play</span>
-                            <span className="px-2 py-0.5 bg-white/10 text-white/60 text-[10px] rounded border border-white/10 uppercase font-bold">ROTD-EN065</span>
-                        </div>
-                        <p className="text-xs leading-relaxed text-white/80">
-                            Send any number of other cards from your hand and/or field to the GY; choose that many Effect Monsters your opponent controls, and until the end of this turn, their ATK is halved, also their effects are negated. In response to this card's activation, your opponent cannot activate cards, or the effects of cards, with the same original type (Monster/Spell/Trap) as the cards sent to the GY to activate this card.
-                        </p>
+                        {hoveredCardDetails ? (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {hoveredCardDetails.race && <span className="px-2 py-0.5 bg-[#00f2ff]/20 text-[#00f2ff] text-[10px] rounded border border-[#00f2ff]/40 uppercase font-bold tracking-wider">{hoveredCardDetails.race}</span>}
+                                    {hoveredCardDetails.attribute && <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded border border-amber-500/40 uppercase font-bold tracking-wider">{hoveredCardDetails.attribute}</span>}
+                                    {hoveredCardDetails.atk !== undefined && <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded border border-red-500/40 uppercase font-bold tracking-wider">ATK {hoveredCardDetails.atk}</span>}
+                                    {hoveredCardDetails.def !== undefined && <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded border border-blue-500/40 uppercase font-bold tracking-wider">DEF {hoveredCardDetails.def}</span>}
+                                    {hoveredCardDetails.level !== undefined && <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] rounded border border-yellow-500/40 uppercase font-bold tracking-wider">LVL {hoveredCardDetails.level}</span>}
+                                </div>
+                                <p className="text-xs leading-relaxed text-white/80 whitespace-pre-wrap font-sans">
+                                    {hoveredCardDetails.desc}
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-xs text-white/40 text-center mt-10 px-4">Hover over any card on the field or hand to read its details.</p>
+                        )}
                     </div>
-                </aside >
+                </aside>
             </main>
 
             {/* ═══ FOOTER: Hand Display ═══ */}
@@ -665,13 +697,14 @@ export default function DuelSimulator() {
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, img, `hand-${i}`)}
                                 onClick={() => setPlacingCard({ img, sourceId: `hand-${i}` })}
+                                onMouseEnter={() => handleCardHover(img)}
                             >
                                 <img className={`w-full h-full object-cover rounded pointer-events-none transition-all ${placingCard?.sourceId === `hand-${i}` ? 'ring-4 ring-primary ring-opacity-100 ring-offset-2' : ''}`} src={img} alt={`Hand card ${i + 1}`} />
                             </div>
                         );
                     })}
                 </div>
-            </footer>
+            </footer >
             <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showExtraDeckModal ? 'visible' : 'invisible'}`}>
                 <div
                     className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showExtraDeckModal ? 'opacity-100' : 'opacity-0'}`}
@@ -712,6 +745,6 @@ export default function DuelSimulator() {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
