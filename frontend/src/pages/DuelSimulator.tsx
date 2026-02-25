@@ -316,16 +316,6 @@ export default function DuelSimulator() {
     }, [user, room?.id]);
 
     // Determine player roles
-    const isPlayer1 = true; // For now, you are always player on bottom
-    const p1State = {
-        lp: 8000,
-        handCount: hand.length,
-        deckCount: deck.length,
-        gyCount: gy.length,
-        extraDeckCount: extraDeck.length,
-        username: user?.user_metadata?.username || user?.email?.split('@')[0] || 'You',
-        avatar: user?.user_metadata?.avatar_url || null,
-    };
 
     if (loading) {
         return (
