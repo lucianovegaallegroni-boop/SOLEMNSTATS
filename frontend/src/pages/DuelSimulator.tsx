@@ -42,6 +42,8 @@ export default function DuelSimulator() {
     const [extraDeck, setExtraDeck] = useState<string[]>([]);
     const [lp] = useState(8000);
     const [showExtraDeckModal, setShowExtraDeckModal] = useState(false);
+    const [showDeckModal, setShowDeckModal] = useState(false);
+    const [showGyModal, setShowGyModal] = useState(false);
     const [placingCard, setPlacingCard] = useState<{ img: string, sourceId: string } | null>(null);
     const slotHighlightClass = placingCard ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0a0a0c] cursor-pointer hover:bg-primary/20 transition-colors' : '';
 
@@ -159,6 +161,14 @@ export default function DuelSimulator() {
             const extraIndex = parseInt(sourceId.split('-')[1]);
             setExtraDeck(prev => prev.filter((_, idx) => idx !== extraIndex));
             isExtra = true;
+        } else if (sourceId.startsWith('deck-')) {
+            const deckIndex = parseInt(sourceId.split('-')[1]);
+            setDeck(prev => prev.filter((_, idx) => idx !== deckIndex));
+            isExtra = false;
+        } else if (sourceId.startsWith('gy-')) {
+            const gyIndex = parseInt(sourceId.split('-')[1]);
+            setGy(prev => prev.filter((_, idx) => idx !== gyIndex));
+            isExtra = false;
         } else if (sourceId.startsWith('field-')) {
             const actualSourceId = sourceId.replace('field-', '');
             if (actualSourceId === targetId) {
@@ -178,6 +188,8 @@ export default function DuelSimulator() {
         setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra, position } }));
         setPlacingCard(null);
         setShowExtraDeckModal(false);
+        setShowDeckModal(false);
+        setShowGyModal(false);
     };
 
     const handleCardAction = (slotId: string, action: 'atk' | 'def' | 'gy' | 'hand' | 'deck' | 'extradeck') => {
@@ -214,10 +226,11 @@ export default function DuelSimulator() {
         const card = fieldCards[slotId];
         return (
             <div
-                className={`card-slot rounded-lg overflow-hidden relative group ${extraClass || ''} ${slotHighlightClass}`}
+                className={`card-slot rounded-lg overflow-hidden relative group transition-transform ${extraClass || ''} ${slotHighlightClass}`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, slotId)}
                 onClick={() => handleSlotClick(slotId)}
+                onMouseEnter={() => handleCardHover(card?.img)}
             >
                 {card ? (
                     <>
@@ -228,34 +241,32 @@ export default function DuelSimulator() {
                             draggable
                             onDragStart={(e) => handleDragStart(e, card.img, `field-${slotId}`)}
                         />
-                        {/* Context Menu Overlay */}
-                        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 pointer-events-auto">
+                        {/* Context Menu Overlay (Spawns Upwards) */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-28 bg-[#0a0a0c]/95 border border-[#1b0726] shadow-2xl p-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-auto rounded">
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.position === 'atk' ? 'def' : 'atk'); }}
-                                className="text-[10px] w-full bg-white/10 hover:bg-white/30 text-white rounded py-[2px] mb-1 transition-colors font-bold uppercase"
+                                className="text-[10px] w-full bg-white/10 hover:bg-white/30 text-white rounded py-[4px] mb-1 transition-colors font-bold uppercase block text-center"
                             >
                                 Change {card.position === 'atk' ? 'DEF' : 'ATK'}
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'gy'); }}
-                                className="text-[10px] w-full bg-red-900/60 hover:bg-red-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
+                                className="text-[10px] w-full bg-red-900/60 hover:bg-red-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
                             >
                                 To GY
                             </button>
                             <button
-                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.isExtra ? 'extradeck' : 'hand'); }}
-                                className="text-[10px] w-full bg-blue-900/60 hover:bg-blue-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'hand'); }}
+                                className="text-[10px] w-full bg-blue-900/60 hover:bg-blue-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
                             >
-                                To {card.isExtra ? 'Extra' : 'Hand'}
+                                To Hand
                             </button>
-                            {!card.isExtra && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'deck'); }}
-                                    className="text-[10px] w-full bg-amber-900/60 hover:bg-amber-500 text-white rounded py-[2px] transition-colors uppercase font-bold"
-                                >
-                                    To Deck
-                                </button>
-                            )}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'deck'); }}
+                                className="text-[10px] w-full bg-amber-900/60 hover:bg-amber-500 text-white rounded py-[4px] transition-colors uppercase font-bold block text-center"
+                            >
+                                To Deck
+                            </button>
                         </div>
                     </>
                 ) : (
@@ -645,7 +656,12 @@ export default function DuelSimulator() {
                         {/* ROW 4: Player Monsters */}
                         {renderFieldSlot('pl-field', 'Field')}
                         {[0, 1, 2, 3, 4].map(i => renderFieldSlot(`pl-mon-${i}`, 'Monster'))}
-                        <div className="card-slot rounded-lg border-[#7f13ec]/20 relative">
+                        <div
+                            className="card-slot rounded-lg border-[#7f13ec]/20 relative cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => {
+                                if (gy.length > 0) setShowGyModal(true);
+                            }}
+                        >
                             <div className="absolute top-1 right-2 text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20">{gy.length}</div>
                             <div className="slot-label">GY</div>
                         </div>
@@ -673,10 +689,7 @@ export default function DuelSimulator() {
                         <div
                             className="card-slot rounded-lg bg-gradient-to-br from-[#efcc99] to-[#bf854b] shadow-[inset_0_0_20px_rgba(0,0,0,0.3)] border-none relative group cursor-pointer hover:scale-105 transition-transform"
                             onClick={() => {
-                                if (deck.length > 0) {
-                                    setHand([...hand, deck[0]]);
-                                    setDeck(deck.slice(1));
-                                }
+                                if (deck.length > 0) setShowDeckModal(true);
                             }}
                         >
                             <div className="absolute top-1 right-2 text-xs font-bold text-amber-900 border border-amber-900/40 rounded px-1 bg-white/20">{deck.length}</div>
@@ -774,6 +787,7 @@ export default function DuelSimulator() {
                                         setPlacingCard({ img, sourceId: `extradeck-${idx}` });
                                         setShowExtraDeckModal(false); // Close immediately so they can see field
                                     }}
+                                    onMouseEnter={() => handleCardHover(img)}
                                 />
                             </div>
                         ))}
@@ -782,6 +796,125 @@ export default function DuelSimulator() {
                         <div className="text-center text-slate-500 py-12">
                             <span className="material-icons text-5xl opacity-30 mb-2">style</span>
                             <p className="font-bold">No cards in Extra Deck</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* MAIN DECK MODAL */}
+            <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showDeckModal ? 'visible' : 'invisible'}`}>
+                <div
+                    className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showDeckModal ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={() => setShowDeckModal(false)}
+                ></div>
+                <div
+                    className={`bg-[#0a0a0c] border border-[#a87f4c] rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative transition-all ${showDeckModal ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white uppercase italic flex items-center gap-2"><span className="material-icons text-amber-500">layers</span> Main Deck</h2>
+                        <div className="flex space-x-4">
+                            <button
+                                onClick={() => {
+                                    if (deck.length > 0) {
+                                        setHand([...hand, deck[0]]);
+                                        setDeck(deck.slice(1));
+                                    }
+                                }}
+                                className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-icons text-sm">waving_hand</span> Draw 1
+                            </button>
+                            <button
+                                onClick={() => {
+                                    // Shuffle main deck (Fisher-Yates)
+                                    const shuffledDeck = [...deck];
+                                    for (let i = shuffledDeck.length - 1; i > 0; i--) {
+                                        const j = Math.floor(Math.random() * (i + 1));
+                                        [shuffledDeck[i], shuffledDeck[j]] = [shuffledDeck[j], shuffledDeck[i]];
+                                    }
+                                    setDeck(shuffledDeck);
+                                }}
+                                className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg transition-colors flex items-center gap-2 border border-white/20"
+                            >
+                                <span className="material-icons text-sm">shuffle</span> Shuffle
+                            </button>
+                            <button onClick={() => setShowDeckModal(false)} className="text-slate-400 hover:text-white transition-colors"><span className="material-icons">close</span></button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4 overflow-y-auto max-h-[60vh] p-4 custom-scrollbar">
+                        {deck.map((img, idx) => (
+                            <div key={idx} className="relative group cursor-pointer hover:-translate-y-2 transition-transform">
+                                <img
+                                    src={img}
+                                    alt={`Deck ${idx}`}
+                                    className={`w-full h-auto rounded-lg shadow-lg border-2 ${placingCard?.sourceId === `deck-${idx}` ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]' : 'border-transparent'}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        handleDragStart(e, img, `deck-${idx}`);
+                                        setShowDeckModal(false);
+                                    }}
+                                    onClick={() => {
+                                        setPlacingCard({ img, sourceId: `deck-${idx}` });
+                                        setShowDeckModal(false);
+                                    }}
+                                    onMouseEnter={() => handleCardHover(img)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {deck.length === 0 && (
+                        <div className="text-center text-slate-500 py-12">
+                            <span className="material-icons text-5xl opacity-30 mb-2">layers_clear</span>
+                            <p className="font-bold">No cards in Deck</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* GRAVEYARD MODAL */}
+            <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showGyModal ? 'visible' : 'invisible'}`}>
+                <div
+                    className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showGyModal ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={() => setShowGyModal(false)}
+                ></div>
+                <div
+                    className={`bg-[#0a0a0c] border border-red-500/50 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative transition-all ${showGyModal ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white uppercase italic flex items-center gap-2"><span className="material-icons text-red-500">skull</span> Graveyard</h2>
+                        <button onClick={() => setShowGyModal(false)} className="text-slate-400 hover:text-white transition-colors"><span className="material-icons">close</span></button>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4 overflow-y-auto max-h-[60vh] p-4 custom-scrollbar">
+                        {[...gy].reverse().map((img, idx) => {
+                            // Because we reversed it for logical display (top card first), we need the original idx
+                            // original_idx = gy.length - 1 - idx
+                            const originalIdx = gy.length - 1 - idx;
+                            return (
+                                <div key={idx} className="relative group cursor-pointer hover:-translate-y-2 transition-transform">
+                                    <img
+                                        src={img}
+                                        alt={`GY ${idx}`}
+                                        className={`w-full h-auto rounded-lg shadow-lg border-2 ${placingCard?.sourceId === `gy-${originalIdx}` ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)]' : 'border-transparent'}`}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            handleDragStart(e, img, `gy-${originalIdx}`);
+                                            setShowGyModal(false);
+                                        }}
+                                        onClick={() => {
+                                            setPlacingCard({ img, sourceId: `gy-${originalIdx}` });
+                                            setShowGyModal(false);
+                                        }}
+                                        onMouseEnter={() => handleCardHover(img)}
+                                    />
+                                    <span className="absolute -top-2 -left-2 bg-black text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-red-500">{originalIdx + 1}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {gy.length === 0 && (
+                        <div className="text-center text-slate-500 py-12">
+                            <span className="material-icons text-5xl opacity-30 mb-2">delete_outline</span>
+                            <p className="font-bold">No cards in Graveyard</p>
                         </div>
                     )}
                 </div>
