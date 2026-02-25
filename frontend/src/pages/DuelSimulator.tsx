@@ -315,7 +315,11 @@ export default function DuelSimulator() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, room?.id]);
 
-    // Determine player roles
+    const isHost = user?.id === room?.host_id;
+    const myUsername = isHost ? room?.host_username : (room?.opponent_username || user?.user_metadata?.username || 'You');
+    const myAvatar = isHost ? room?.host_avatar : (room?.opponent_avatar || user?.user_metadata?.avatar_url);
+    const oppUsername = isHost ? (room?.opponent_username || 'Waiting...') : room?.host_username;
+    const oppAvatar = isHost ? room?.opponent_avatar : room?.host_avatar;
 
     if (loading) {
         return (
@@ -369,44 +373,28 @@ export default function DuelSimulator() {
                 </div>
             )}
 
-            {/* ═══ HEADER ═══ */}
-            <header className="p-4 flex justify-between items-center glassmorphism z-40 border-b border-[#7f13ec]/20 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#7f13ec] rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(127,19,236,0.5)]">
-                        <span className="text-white font-bold text-xl">S</span>
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tighter text-white">SolemnStats</h1>
-                </div>
-                {/* Turn Tracker */}
-                <div className="absolute left-1/2 -translate-x-1/2 px-8 py-2 glassmorphism rounded-full border border-[#00f2ff]/30 flex items-center gap-4">
-                    <span className="text-[#00f2ff] font-bold animate-pulse">YOUR TURN</span>
-                    <div className="h-4 w-[1px] bg-white/20"></div>
-                    <span className="text-white/60 text-sm">TURN 03</span>
-                </div>
-                <div className="flex items-center gap-6">
-                    <div className="text-right">
-                        <p className="text-xs text-white/40 uppercase">Connection</p>
-                        <p className="text-green-400 font-mono text-sm">STABLE: 24ms</p>
-                    </div>
-                    <button className="bg-[#7f13ec]/20 hover:bg-[#7f13ec]/40 border border-[#7f13ec]/50 px-4 py-2 rounded-lg text-sm font-medium transition-all">Settings</button>
-                </div>
-            </header>
-
             {/* ═══ MAIN: Left Panel + Duel Field + Right Panel ═══ */}
             <main className="flex-1 flex overflow-hidden relative">
 
                 {/* ── LEFT PANEL: Status / Resources ── */}
                 <aside className="w-72 p-6 flex flex-col gap-6 glassmorphism border-r border-[#7f13ec]/10 shrink-0">
-                    {/* Opponent LP */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                            <span className="text-white/60 text-xs uppercase font-bold tracking-widest">Opponent</span>
-                            <span className="text-2xl font-bold text-white tracking-tighter">8000 <span className="text-xs text-white/40">LP</span></span>
+                    {/* Opponent Info & LP */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 bg-black/40 p-2 rounded-lg border border-white/5">
+                            <img src={oppAvatar || `https://ui-avatars.com/api/?name=${oppUsername}&background=D4AF37&color=121212`} alt="Opponent Avatar" className="w-12 h-16 rounded object-cover border-2 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]" />
+                            <div className="flex-1 overflow-hidden">
+                                <p className="text-xs text-white/60 uppercase font-bold tracking-widest truncate">{oppUsername}</p>
+                            </div>
                         </div>
-                        <div className="lp-bar"><div className="lp-fill"></div></div>
-                        <div className="flex gap-2 pt-2">
-                            <div className="w-8 h-4 bg-white/10 rounded flex items-center justify-center text-[10px]">H: 5</div>
-                            <div className="w-8 h-4 bg-white/10 rounded flex items-center justify-center text-[10px]">D: 35</div>
+                        <div className="flex justify-between items-end">
+                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-right">8000 <span className="text-xs text-white/40">LP</span></span>
+                        </div>
+                        <div className="lp-bar"><div className="lp-fill bg-red-500"></div></div>
+                        <div className="flex gap-2 justify-end">
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Hand: 5</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Deck: 35</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Extra: 15</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">GY: 0</div>
                         </div>
                     </div>
 
@@ -432,20 +420,39 @@ export default function DuelSimulator() {
                         </div>
                     </div>
 
-                    {/* Player LP */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                            <span className="text-[#00f2ff] text-xs uppercase font-bold tracking-widest">You</span>
-                            <span className="text-2xl font-bold text-white tracking-tighter">8000 <span className="text-xs text-white/40">LP</span></span>
+                    {/* Player Info & LP */}
+                    <div className="space-y-3">
+                        <div className="flex gap-2 justify-start">
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Hand: {hand.length}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Deck: {deck.length}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Extra: {extraDeck.length}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">GY: {gy.length}</div>
                         </div>
-                        <div className="lp-bar"><div className="lp-fill"></div></div>
+                        <div className="lp-bar"><div className="lp-fill bg-[#00f2ff]"></div></div>
+                        <div className="flex justify-between items-end">
+                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-left">8000 <span className="text-xs text-white/40">LP</span></span>
+                        </div>
+                        <div className="flex items-center gap-3 bg-black/40 p-2 rounded-lg border border-white/5">
+                            <img src={myAvatar || `https://ui-avatars.com/api/?name=${myUsername}&background=D4AF37&color=121212`} alt="Your Avatar" className="w-12 h-16 rounded object-cover border-2 border-[#00f2ff]/50 shadow-[0_0_10px_rgba(0,242,255,0.3)]" />
+                            <div className="flex-1 overflow-hidden">
+                                <p className="text-xs text-[#00f2ff] uppercase font-bold tracking-widest truncate">{myUsername}</p>
+                            </div>
+                        </div>
                     </div>
                 </aside>
 
                 {/* ── CENTER: Duel Field ── */}
                 <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden min-h-0">
+
+                    {/* Turn Tracker (Moved from header) */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 px-8 py-2 glassmorphism rounded-full border border-[#00f2ff]/30 flex items-center gap-4 z-10 shadow-lg">
+                        <span className="text-[#00f2ff] font-bold animate-pulse">YOUR TURN</span>
+                        <div className="h-4 w-[1px] bg-white/20"></div>
+                        <span className="text-white/60 text-sm">TURN 03</span>
+                    </div>
+
                     {/* 7-col × 5-row field grid */}
-                    <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center">
+                    <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center mt-8">
 
                         {/* ROW 1: Opponent Backrow */}
                         <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
