@@ -49,6 +49,26 @@ export default function DuelSimulator() {
     const cardCache = useRef<Record<string, any>>({});
     const [hoveredCardDetails, setHoveredCardDetails] = useState<any>(null);
 
+    const localStateRef = useRef({
+        lp: 8000,
+        deckSize: 0,
+        hand: [] as string[],
+        gySize: 0,
+        extraSize: 0,
+        fieldCards: {} as Record<string, FieldCard | undefined>
+    });
+
+    useEffect(() => {
+        localStateRef.current = {
+            lp,
+            deckSize: deck.length,
+            hand,
+            gySize: gy.length,
+            extraSize: extraDeck.length,
+            fieldCards
+        };
+    }, [lp, deck.length, hand, gy.length, extraDeck.length, fieldCards]);
+
     const handleCardHover = async (imgUrl: string | undefined) => {
         if (!imgUrl || imgUrl.includes('card-back') || imgUrl.startsWith('data:')) return;
 
@@ -338,7 +358,7 @@ export default function DuelSimulator() {
     }, [roomCode]);
 
     useEffect(() => {
-        if (!room) return;
+        if (!room?.id || !user?.id) return;
         const subscription = supabase
             .channel(`room:${room.id}`, {
                 config: {
@@ -349,11 +369,32 @@ export default function DuelSimulator() {
                 setRoom(payload.new as DuelRoom);
             })
             .on('broadcast', { event: 'sync_state' }, (payload) => {
-                if (payload.payload.playerId !== user?.id) {
+                if (payload.payload.playerId !== user.id) {
                     setOppState(payload.payload.state);
                 }
             })
-            .subscribe();
+            .on('broadcast', { event: 'request_sync' }, (payload) => {
+                if (payload.payload.playerId !== user.id) {
+                    subscription.send({
+                        type: 'broadcast',
+                        event: 'sync_state',
+                        payload: {
+                            playerId: user.id,
+                            state: localStateRef.current
+                        }
+                    });
+                }
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    // When we finally subscribe, ask the other player for their current state
+                    subscription.send({
+                        type: 'broadcast',
+                        event: 'request_sync',
+                        payload: { playerId: user.id }
+                    });
+                }
+            });
 
         channelRef.current = subscription;
 
@@ -361,7 +402,7 @@ export default function DuelSimulator() {
             supabase.removeChannel(subscription);
             channelRef.current = null;
         };
-    }, [room, user?.id]);
+    }, [room?.id, user?.id]);
 
     useEffect(() => {
         if (!channelRef.current || !room || !user) return;
