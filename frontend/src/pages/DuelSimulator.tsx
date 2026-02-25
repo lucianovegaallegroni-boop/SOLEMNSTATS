@@ -626,22 +626,19 @@ export default function DuelSimulator() {
                     <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center mt-24">
 
                         {/* ROW 1: Opponent Backrow */}
-                        <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.deckSize}</span>
-                            <div className="slot-label text-white/50">Deck</div>
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center pointer-events-none">
+                            <div className="slot-label text-white/50">Deck ({oppState.deckSize})</div>
                         </div>
                         {renderOpponentSlot('pl-pz-right', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
                         {[2, 1, 0].map(i => renderOpponentSlot(`pl-st-${i}`, 'S/T'))}
                         {renderOpponentSlot('pl-pz-left', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
-                        <div className="card-slot rounded-lg bg-gradient-to-br from-[#a6a9b0] to-[#60656e] border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.extraSize}</span>
-                            <div className="slot-label text-white/50">Extra</div>
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-[#a6a9b0] to-[#60656e] border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center pointer-events-none">
+                            <div className="slot-label text-white/50">Extra ({oppState.extraSize})</div>
                         </div>
 
                         {/* ROW 2: Opponent Monsters */}
-                        <div className="card-slot rounded-lg border-[#7f13ec]/20 flex flex-col items-center justify-center">
-                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.gySize}</span>
-                            <div className="slot-label">GY</div>
+                        <div className="card-slot rounded-lg border-[#7f13ec]/20 flex flex-col items-center justify-center pointer-events-none">
+                            <div className="slot-label">GY ({oppState.gySize})</div>
                         </div>
                         {[4, 3, 2, 1, 0].map(i => renderOpponentSlot(`pl-mon-${i}`, 'Monster'))}
                         {renderOpponentSlot('pl-field', 'Field')}
@@ -668,8 +665,7 @@ export default function DuelSimulator() {
                                 if (gy.length > 0) setShowGyModal(true);
                             }}
                         >
-                            <div className="absolute top-1 right-2 text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20">{gy.length}</div>
-                            <div className="slot-label">GY</div>
+                            <div className="slot-label pointer-events-none">GY ({gy.length})</div>
                         </div>
 
                         {/* ROW 5: Player Backrow */}
@@ -685,8 +681,7 @@ export default function DuelSimulator() {
                                 }
                             }}
                         >
-                            <div className="absolute top-1 right-2 text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20">{extraDeck.length}</div>
-                            <div className="slot-label text-white/50 mix-blend-overlay">Extra</div>
+                            <div className="slot-label text-white/50 mix-blend-overlay pointer-events-none">Extra ({extraDeck.length})</div>
                         </div>
                         {renderFieldSlot('pl-pz-left', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
                         {[0, 1, 2].map(i => renderFieldSlot(`pl-st-${i}`, 'S/T'))}
@@ -698,8 +693,7 @@ export default function DuelSimulator() {
                                 if (deck.length > 0) setShowDeckModal(true);
                             }}
                         >
-                            <div className="absolute top-1 right-2 text-xs font-bold text-amber-900 border border-amber-900/40 rounded px-1 bg-white/20">{deck.length}</div>
-                            <div className="slot-label text-amber-900 font-bold mix-blend-overlay">Deck</div>
+                            <div className="slot-label text-amber-900 font-bold mix-blend-overlay pointer-events-none">Deck ({deck.length})</div>
                         </div>
                     </div>
                 </div>
