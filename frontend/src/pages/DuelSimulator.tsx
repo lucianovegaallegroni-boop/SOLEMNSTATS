@@ -32,6 +32,7 @@ export default function DuelSimulator() {
     const [deck, setDeck] = useState<string[]>([]);
     const [hand, setHand] = useState<string[]>([]);
     const [gy, setGy] = useState<string[]>([]);
+    const [banish, setBanish] = useState<string[]>([]);
 
     interface FieldCard {
         img: string;
@@ -44,6 +45,7 @@ export default function DuelSimulator() {
     const [showExtraDeckModal, setShowExtraDeckModal] = useState(false);
     const [showDeckModal, setShowDeckModal] = useState(false);
     const [showGyModal, setShowGyModal] = useState(false);
+    const [showBanishModal, setShowBanishModal] = useState(false);
     const [placingCard, setPlacingCard] = useState<{ img: string, sourceId: string } | null>(null);
     const slotHighlightClass = placingCard ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0a0a0c] cursor-pointer hover:bg-primary/20 transition-colors' : '';
 
@@ -56,6 +58,7 @@ export default function DuelSimulator() {
         deckSize: 0,
         hand: [] as string[],
         gySize: 0,
+        banishSize: 0,
         extraSize: 0,
         fieldCards: {} as Record<string, FieldCard | undefined>
     });
@@ -66,10 +69,11 @@ export default function DuelSimulator() {
             deckSize: deck.length,
             hand,
             gySize: gy.length,
+            banishSize: banish.length,
             extraSize: extraDeck.length,
             fieldCards
         };
-    }, [lp, deck.length, hand, gy.length, extraDeck.length, fieldCards]);
+    }, [lp, deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards]);
 
     const handleCardHover = async (imgUrl: string | undefined) => {
         if (!imgUrl || imgUrl.includes('card-back') || imgUrl.startsWith('data:')) return;
@@ -100,6 +104,7 @@ export default function DuelSimulator() {
         deckSize: 0,
         hand: [] as string[],
         gySize: 0,
+        banishSize: 0,
         extraSize: 0,
         fieldCards: {} as Record<string, FieldCard | undefined>
     });
@@ -118,32 +123,50 @@ export default function DuelSimulator() {
         const cardImg = e.dataTransfer.getData('cardImg');
         const sourceId = e.dataTransfer.getData('sourceId');
         if (!cardImg) return;
+        let isExtra = false;
+        let position: 'atk' | 'def' = 'atk';
 
         if (sourceId.startsWith('hand-')) {
             const handIndex = parseInt(sourceId.split('-')[1]);
             setHand(prev => prev.filter((_, idx) => idx !== handIndex));
-            setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra: false, position: 'atk' } }));
+            isExtra = false;
         } else if (sourceId.startsWith('extradeck-')) {
             const extraIndex = parseInt(sourceId.split('-')[1]);
             setExtraDeck(prev => prev.filter((_, idx) => idx !== extraIndex));
-            setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra: true, position: 'atk' } }));
-            setShowExtraDeckModal(false);
+            isExtra = true;
+        } else if (sourceId.startsWith('deck-')) {
+            const deckIndex = parseInt(sourceId.split('-')[1]);
+            setDeck(prev => prev.filter((_, idx) => idx !== deckIndex));
+            isExtra = false;
+        } else if (sourceId.startsWith('gy-')) {
+            const gyIndex = parseInt(sourceId.split('-')[1]);
+            setGy(prev => prev.filter((_, idx) => idx !== gyIndex));
+            isExtra = false;
+        } else if (sourceId.startsWith('banish-')) {
+            const banishIndex = parseInt(sourceId.split('-')[1]);
+            setBanish(prev => prev.filter((_, idx) => idx !== banishIndex));
+            isExtra = false;
         } else if (sourceId.startsWith('field-')) {
             const actualSourceId = sourceId.replace('field-', '');
             if (actualSourceId !== targetId) {
+                if (fieldCards[actualSourceId]) {
+                    isExtra = fieldCards[actualSourceId]!.isExtra;
+                    position = fieldCards[actualSourceId]!.position;
+                }
                 setFieldCards(prev => {
                     const newField = { ...prev };
-                    const movingCard = newField[actualSourceId];
-                    if (movingCard) {
-                        newField[targetId] = { ...movingCard };
-                    } else {
-                        newField[targetId] = { img: cardImg, isExtra: false, position: 'atk' };
-                    }
                     newField[actualSourceId] = undefined;
                     return newField;
                 });
             }
         }
+
+        setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra, position } }));
+        setPlacingCard(null);
+        setShowExtraDeckModal(false);
+        setShowDeckModal(false);
+        setShowGyModal(false);
+        setShowBanishModal(false);
     };
 
     const handleSlotClick = (targetId: string) => {
@@ -169,6 +192,10 @@ export default function DuelSimulator() {
             const gyIndex = parseInt(sourceId.split('-')[1]);
             setGy(prev => prev.filter((_, idx) => idx !== gyIndex));
             isExtra = false;
+        } else if (sourceId.startsWith('banish-')) {
+            const banishIndex = parseInt(sourceId.split('-')[1]);
+            setBanish(prev => prev.filter((_, idx) => idx !== banishIndex));
+            isExtra = false;
         } else if (sourceId.startsWith('field-')) {
             const actualSourceId = sourceId.replace('field-', '');
             if (actualSourceId === targetId) {
@@ -185,14 +212,16 @@ export default function DuelSimulator() {
                 return newField;
             });
         }
+
         setFieldCards(prev => ({ ...prev, [targetId]: { img: cardImg, isExtra, position } }));
         setPlacingCard(null);
         setShowExtraDeckModal(false);
         setShowDeckModal(false);
         setShowGyModal(false);
+        setShowBanishModal(false);
     };
 
-    const handleCardAction = (slotId: string, action: 'atk' | 'def' | 'gy' | 'hand' | 'deck' | 'extradeck') => {
+    const handleCardAction = (slotId: string, action: 'atk' | 'def' | 'gy' | 'hand' | 'deck' | 'extradeck' | 'banish') => {
         const card = fieldCards[slotId];
         if (!card) return;
 
@@ -219,6 +248,8 @@ export default function DuelSimulator() {
             setDeck(prev => [...prev, card.img]);
         } else if (action === 'extradeck') {
             setExtraDeck(prev => [...prev, card.img]);
+        } else if (action === 'banish') {
+            setBanish(prev => [...prev, card.img]);
         }
     };
 
@@ -258,6 +289,12 @@ export default function DuelSimulator() {
                                 className="text-[10px] w-full bg-red-900/60 hover:bg-red-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
                             >
                                 To GY
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, 'banish'); }}
+                                className="text-[10px] w-full bg-gray-900/60 hover:bg-gray-500 text-white rounded py-[4px] mb-1 transition-colors uppercase font-bold block text-center"
+                            >
+                                To Banish
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleCardAction(slotId, card.isExtra ? 'extradeck' : 'hand'); }}
@@ -433,12 +470,13 @@ export default function DuelSimulator() {
                     deckSize: deck.length,
                     hand: hand,
                     gySize: gy.length,
+                    banishSize: banish.length,
                     extraSize: extraDeck.length,
                     fieldCards: fieldCards
                 }
             }
         });
-    }, [deck.length, hand, gy.length, extraDeck.length, fieldCards, lp, room, user]);
+    }, [deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards, lp, room, user]);
 
     // Auto-join as opponent
     useEffect(() => {
@@ -643,8 +681,13 @@ export default function DuelSimulator() {
                         {[4, 3, 2, 1, 0].map(i => renderOpponentSlot(`pl-mon-${i}`, 'Monster'))}
                         {renderOpponentSlot('pl-field', 'Field')}
 
-                        {/* ROW 3: Extra Monster Zones */}
-                        <div className="col-span-2"></div>
+                        {/* ROW 3: Extra Monster Zones & Banishment */}
+                        <div
+                            className="card-slot rounded-lg bg-gradient-to-br from-gray-600 to-gray-800 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center pointer-events-none"
+                        >
+                            <div className="slot-label text-white/50">Banish ({oppState.banishSize})</div>
+                        </div>
+                        <div className="col-start-2"></div>
                         {fieldCards['emz-left'] ? renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]') :
                             oppState.fieldCards['emz-right'] ? renderOpponentSlot('emz-right', '', 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]') :
                                 renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
@@ -654,7 +697,15 @@ export default function DuelSimulator() {
                         {fieldCards['emz-right'] ? renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]') :
                             oppState.fieldCards['emz-left'] ? renderOpponentSlot('emz-left', '', 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]') :
                                 renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
-                        <div className="col-span-2"></div>
+                        <div className="col-start-6"></div>
+                        <div
+                            className="card-slot rounded-lg bg-gradient-to-br from-gray-600 to-gray-800 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.3)] relative group cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => {
+                                if (banish.length > 0) setShowBanishModal(true);
+                            }}
+                        >
+                            <div className="slot-label text-white/50 pointer-events-none">Banish ({banish.length})</div>
+                        </div>
 
                         {/* ROW 4: Player Monsters */}
                         {renderFieldSlot('pl-field', 'Field')}
@@ -848,17 +899,46 @@ export default function DuelSimulator() {
                                     src={img}
                                     alt={`Deck ${idx}`}
                                     className={`w-full h-auto rounded-lg shadow-lg border-2 ${placingCard?.sourceId === `deck-${idx}` ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)]' : 'border-transparent'}`}
-                                    draggable
-                                    onDragStart={(e) => {
-                                        handleDragStart(e, img, `deck-${idx}`);
-                                        setShowDeckModal(false);
-                                    }}
-                                    onClick={() => {
-                                        setPlacingCard({ img, sourceId: `deck-${idx}` });
-                                        setShowDeckModal(false);
-                                    }}
                                     onMouseEnter={() => handleCardHover(img)}
                                 />
+                                <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg">
+                                    <button
+                                        onClick={() => {
+                                            setHand([...hand, deck[idx]]);
+                                            setDeck(deck.filter((_, i) => i !== idx));
+                                        }}
+                                        className="text-[10px] w-full bg-blue-600 hover:bg-blue-500 text-white rounded py-1 font-bold shadow"
+                                    >
+                                        TO HAND
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setGy([...gy, deck[idx]]);
+                                            setDeck(deck.filter((_, i) => i !== idx));
+                                        }}
+                                        className="text-[10px] w-full bg-red-600 hover:bg-red-500 text-white rounded py-1 font-bold shadow"
+                                    >
+                                        TO GY
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setBanish([...banish, deck[idx]]);
+                                            setDeck(deck.filter((_, i) => i !== idx));
+                                        }}
+                                        className="text-[10px] w-full bg-gray-600 hover:bg-gray-500 text-white rounded py-1 font-bold shadow"
+                                    >
+                                        BANISH
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setPlacingCard({ img, sourceId: `deck-${idx}` });
+                                            setShowDeckModal(false);
+                                        }}
+                                        className="text-[10px] w-full bg-amber-600 hover:bg-amber-500 text-white rounded py-1 font-bold shadow"
+                                    >
+                                        PLAY
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -866,6 +946,49 @@ export default function DuelSimulator() {
                         <div className="text-center text-slate-500 py-12">
                             <span className="material-icons text-5xl opacity-30 mb-2">layers_clear</span>
                             <p className="font-bold">No cards in Deck</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* BANISH VIEW MODAL */}
+            <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showBanishModal ? 'visible' : 'invisible'}`}>
+                <div
+                    className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showBanishModal ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={() => setShowBanishModal(false)}
+                ></div>
+                <div
+                    className={`bg-[#0a0a0c] border border-gray-600 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative transition-all ${showBanishModal ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white uppercase italic flex items-center gap-2"><span className="material-icons text-gray-400">delete_forever</span> Banishment</h2>
+                        <button onClick={() => setShowBanishModal(false)} className="text-slate-400 hover:text-white transition-colors"><span className="material-icons">close</span></button>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4 overflow-y-auto max-h-[60vh] p-4 custom-scrollbar">
+                        {banish.map((img, idx) => (
+                            <div key={idx} className="relative group cursor-pointer hover:-translate-y-2 transition-transform">
+                                <img
+                                    src={img}
+                                    alt={`Banish ${idx}`}
+                                    className={`w-full h-auto rounded-lg shadow-lg border-2 ${placingCard?.sourceId === `banish-${idx}` ? 'border-gray-400 shadow-[0_0_15px_rgba(156,163,175,0.6)]' : 'border-transparent'}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        handleDragStart(e, img, `banish-${idx}`);
+                                        setShowBanishModal(false);
+                                    }}
+                                    onClick={() => {
+                                        setPlacingCard({ img, sourceId: `banish-${idx}` });
+                                        setShowBanishModal(false);
+                                    }}
+                                    onMouseEnter={() => handleCardHover(img)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {banish.length === 0 && (
+                        <div className="text-center text-slate-500 py-12">
+                            <span className="material-icons text-5xl opacity-30 mb-2">delete_forever</span>
+                            <p className="font-bold">No cards banished</p>
                         </div>
                     )}
                 </div>
