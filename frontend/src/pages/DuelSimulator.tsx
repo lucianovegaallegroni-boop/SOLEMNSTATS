@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -40,9 +40,20 @@ export default function DuelSimulator() {
     }
     const [fieldCards, setFieldCards] = useState<Record<string, FieldCard | undefined>>({});
     const [extraDeck, setExtraDeck] = useState<string[]>([]);
+    const [lp] = useState(8000);
     const [showExtraDeckModal, setShowExtraDeckModal] = useState(false);
     const [placingCard, setPlacingCard] = useState<{ img: string, sourceId: string } | null>(null);
     const slotHighlightClass = placingCard ? 'ring-2 ring-primary ring-offset-2 ring-offset-[#0a0a0c] cursor-pointer hover:bg-primary/20 transition-colors' : '';
+
+    const channelRef = useRef<any>(null);
+    const [oppState, setOppState] = useState({
+        lp: 8000,
+        deckSize: 0,
+        hand: [] as string[],
+        gySize: 0,
+        extraSize: 0,
+        fieldCards: {} as Record<string, FieldCard | undefined>
+    });
 
     const handleDragStart = (e: React.DragEvent, card: string, sourceId: string) => {
         e.dataTransfer.setData('cardImg', card);
@@ -207,6 +218,23 @@ export default function DuelSimulator() {
         );
     };
 
+    const renderOpponentSlot = (slotId: string, defaultLabel: React.ReactNode, extraClass?: string) => {
+        const card = oppState.fieldCards[slotId];
+        return (
+            <div className={`card-slot rounded-lg overflow-hidden relative ${extraClass || ''}`}>
+                {card ? (
+                    <img
+                        src={card.img}
+                        alt="Opponent Card"
+                        className={`w-full h-full object-cover transition-transform duration-200 ${card.position === 'def' ? 'rotate-90 scale-[0.85]' : 'rotate-180'}`}
+                    />
+                ) : (
+                    <div className="slot-label pointer-events-none opacity-50">{defaultLabel}</div>
+                )}
+            </div>
+        );
+    };
+
     useEffect(() => {
         const deckId = searchParams.get('deckId');
         if (!deckId) return;
@@ -282,16 +310,47 @@ export default function DuelSimulator() {
     useEffect(() => {
         if (!room) return;
         const subscription = supabase
-            .channel(`room:${room.id}`)
+            .channel(`room:${room.id}`, {
+                config: {
+                    broadcast: { self: true },
+                },
+            })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'duel_rooms', filter: `id=eq.${room.id}` }, (payload) => {
                 setRoom(payload.new as DuelRoom);
             })
+            .on('broadcast', { event: 'sync_state' }, (payload) => {
+                if (payload.payload.playerId !== user?.id) {
+                    setOppState(payload.payload.state);
+                }
+            })
             .subscribe();
+
+        channelRef.current = subscription;
 
         return () => {
             supabase.removeChannel(subscription);
+            channelRef.current = null;
         };
-    }, [room]);
+    }, [room, user?.id]);
+
+    useEffect(() => {
+        if (!channelRef.current || !room || !user) return;
+        channelRef.current.send({
+            type: 'broadcast',
+            event: 'sync_state',
+            payload: {
+                playerId: user.id,
+                state: {
+                    lp: lp,
+                    deckSize: deck.length,
+                    hand: hand,
+                    gySize: gy.length,
+                    extraSize: extraDeck.length,
+                    fieldCards: fieldCards
+                }
+            }
+        });
+    }, [deck.length, hand, gy.length, extraDeck.length, fieldCards, lp, room, user]);
 
     // Auto-join as opponent
     useEffect(() => {
@@ -387,14 +446,14 @@ export default function DuelSimulator() {
                             </div>
                         </div>
                         <div className="flex justify-between items-end">
-                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-right">8000 <span className="text-xs text-white/40">LP</span></span>
+                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-right">{oppState.lp} <span className="text-xs text-white/40">LP</span></span>
                         </div>
-                        <div className="lp-bar"><div className="lp-fill bg-red-500"></div></div>
+                        <div className="lp-bar"><div className="lp-fill bg-red-500" style={{ width: `${Math.max(0, (oppState.lp / 8000) * 100)}%` }}></div></div>
                         <div className="flex gap-2 justify-end">
-                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Hand: 5</div>
-                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Deck: 35</div>
-                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Extra: 15</div>
-                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">GY: 0</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Hand: {oppState.hand.length}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Deck: {oppState.deckSize}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Extra: {oppState.extraSize}</div>
+                            <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">GY: {oppState.gySize}</div>
                         </div>
                     </div>
 
@@ -428,9 +487,9 @@ export default function DuelSimulator() {
                             <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">Extra: {extraDeck.length}</div>
                             <div className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white/60">GY: {gy.length}</div>
                         </div>
-                        <div className="lp-bar"><div className="lp-fill bg-[#00f2ff]"></div></div>
+                        <div className="lp-bar"><div className="lp-fill bg-[#00f2ff]" style={{ width: `${Math.max(0, (lp / 8000) * 100)}%` }}></div></div>
                         <div className="flex justify-between items-end">
-                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-left">8000 <span className="text-xs text-white/40">LP</span></span>
+                            <span className="text-2xl font-bold text-white tracking-tighter w-full text-left">{lp} <span className="text-xs text-white/40">LP</span></span>
                         </div>
                         <div className="flex items-center gap-3 bg-black/40 p-2 rounded-lg border border-white/5">
                             <img src={myAvatar || `https://ui-avatars.com/api/?name=${myUsername}&background=D4AF37&color=121212`} alt="Your Avatar" className="w-12 h-16 rounded object-cover border-2 border-[#00f2ff]/50 shadow-[0_0_10px_rgba(0,242,255,0.3)]" />
@@ -444,6 +503,29 @@ export default function DuelSimulator() {
                 {/* ── CENTER: Duel Field ── */}
                 <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden min-h-0">
 
+                    {/* Opponent Hand Display */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex -space-x-8 pt-4 z-20 pointer-events-none">
+                        {oppState.hand.map((_, i) => {
+                            const total = oppState.hand.length;
+                            const maxRot = 15;
+                            const rotStep = total > 1 ? (maxRot * 2) / (total - 1) : 0;
+                            const rotation = total > 1 ? -maxRot + (rotStep * i) : 0;
+                            const yOffset = total > 1 ? Math.abs(i - (total - 1) / 2) * Math.abs(i - (total - 1) / 2) * 2 : 0;
+
+                            return (
+                                <div
+                                    key={`opp-hand-${i}`}
+                                    className="w-[60px] h-[85px] sm:w-[72px] sm:h-[104px] rounded-sm border-2 border-[#a87f4c] shadow-md shadow-black/80"
+                                    style={{
+                                        transform: `rotate(${180 - rotation}deg) translateY(${yOffset}px)`,
+                                        transformOrigin: 'bottom center',
+                                        background: 'repeating-linear-gradient(45deg, #1b0726, #1b0726 10px, #0f0314 10px, #0f0314 20px)'
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
+
                     {/* Turn Tracker (Moved from header) */}
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 px-8 py-2 glassmorphism rounded-full border border-[#00f2ff]/30 flex items-center gap-4 z-10 shadow-lg">
                         <span className="text-[#00f2ff] font-bold animate-pulse">YOUR TURN</span>
@@ -455,42 +537,37 @@ export default function DuelSimulator() {
                     <div className="w-full h-full max-w-4xl max-h-[60vh] grid grid-cols-7 grid-rows-5 gap-1.5 sm:gap-2 items-center justify-items-center mt-8">
 
                         {/* ROW 1: Opponent Backrow */}
-                        <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-amber-600 to-amber-900 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
+                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.deckSize}</span>
                             <div className="slot-label text-white/50">Deck</div>
                         </div>
-                        <div className="card-slot rounded-lg border-[#00f2ff]/40">
-                            <div className="slot-label text-[#00f2ff]">P-Zone</div>
-                        </div>
-                        {[0, 1, 2].map(i => (
-                            <div key={`opp-st-${i}`} className="card-slot rounded-lg">
-                                <div className="slot-label">S/T</div>
-                            </div>
-                        ))}
-                        <div className="card-slot rounded-lg border-[#00f2ff]/40">
-                            <div className="slot-label text-[#00f2ff]">P-Zone</div>
-                        </div>
-                        <div className="card-slot rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                        {renderOpponentSlot('pl-pz-right', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
+                        {[2, 1, 0].map(i => renderOpponentSlot(`pl-st-${i}`, 'S/T'))}
+                        {renderOpponentSlot('pl-pz-left', <span className="text-[#00f2ff]">P-Zone</span>, 'border-[#00f2ff]/40')}
+                        <div className="card-slot rounded-lg bg-gradient-to-br from-[#a6a9b0] to-[#60656e] border-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
+                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.extraSize}</span>
                             <div className="slot-label text-white/50">Extra</div>
                         </div>
 
                         {/* ROW 2: Opponent Monsters */}
-                        <div className="card-slot rounded-lg border-[#7f13ec]/20">
+                        <div className="card-slot rounded-lg border-[#7f13ec]/20 flex flex-col items-center justify-center">
+                            <span className="text-xs font-bold text-slate-800 border border-slate-800/40 rounded px-1 bg-white/20 mb-1">{oppState.gySize}</span>
                             <div className="slot-label">GY</div>
                         </div>
-                        {[0, 1, 2, 3, 4].map(i => (
-                            <div key={`opp-mon-${i}`} className="card-slot rounded-lg">
-                                <div className="slot-label">Monster</div>
-                            </div>
-                        ))}
-                        <div className="card-slot rounded-lg">
-                            <div className="slot-label">Field</div>
-                        </div>
+                        {[4, 3, 2, 1, 0].map(i => renderOpponentSlot(`pl-mon-${i}`, 'Monster'))}
+                        {renderOpponentSlot('pl-field', 'Field')}
 
                         {/* ROW 3: Extra Monster Zones */}
                         <div className="col-span-2"></div>
-                        {renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
+                        {fieldCards['emz-left'] ? renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]') :
+                            oppState.fieldCards['emz-right'] ? renderOpponentSlot('emz-right', '', 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]') :
+                                renderFieldSlot('emz-left', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
+
                         <div className="col-start-4"></div>
-                        {renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
+
+                        {fieldCards['emz-right'] ? renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]') :
+                            oppState.fieldCards['emz-left'] ? renderOpponentSlot('emz-left', '', 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]') :
+                                renderFieldSlot('emz-right', <span className="text-[#00f2ff] font-bold">Extra<br />Monster</span>, 'border-[#00f2ff] shadow-[0_0_15px_rgba(0,242,255,0.2),inset_0_0_10px_rgba(0,242,255,0.1)]')}
                         <div className="col-span-2"></div>
 
                         {/* ROW 4: Player Monsters */}
@@ -563,11 +640,11 @@ export default function DuelSimulator() {
                             Send any number of other cards from your hand and/or field to the GY; choose that many Effect Monsters your opponent controls, and until the end of this turn, their ATK is halved, also their effects are negated. In response to this card's activation, your opponent cannot activate cards, or the effects of cards, with the same original type (Monster/Spell/Trap) as the cards sent to the GY to activate this card.
                         </p>
                     </div>
-                </aside>
-            </main >
+                </aside >
+            </main>
 
             {/* ═══ FOOTER: Hand Display ═══ */}
-            < footer className="h-40 glassmorphism border-t border-[#7f13ec]/30 flex items-center justify-center relative overflow-visible z-40 shrink-0" >
+            <footer className="h-40 glassmorphism border-t border-[#7f13ec]/30 flex items-center justify-center relative overflow-visible z-40 shrink-0">
                 <div className="player-hand-container flex -space-x-10 pb-8">
                     {hand.map((img, i) => {
                         // Dynamically calculate fan spread rotation based on hand size
@@ -594,7 +671,7 @@ export default function DuelSimulator() {
                         );
                     })}
                 </div>
-            </footer >
+            </footer>
             <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all ${showExtraDeckModal ? 'visible' : 'invisible'}`}>
                 <div
                     className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity ${showExtraDeckModal ? 'opacity-100' : 'opacity-0'}`}
@@ -635,6 +712,6 @@ export default function DuelSimulator() {
                     )}
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
