@@ -31,6 +31,7 @@ export default function Login() {
                         data: {
                             username: username,
                         },
+                        emailRedirectTo: `${window.location.origin}/login`,
                     },
                 })
                 if (error) throw error
