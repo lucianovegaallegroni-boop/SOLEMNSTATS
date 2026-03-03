@@ -11,6 +11,7 @@ interface TournamentResult {
 interface Tournament {
     id: string
     name: string
+    category?: 'Advance' | 'Edison' | 'Genesis'
     date: string
     results: TournamentResult[]
 }
@@ -114,7 +115,6 @@ export default function MetaReport() {
     const [showModal, setShowModal] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(true)
-    const [hoveredSegment, setHoveredSegment] = useState<{ name: string, percentage: number } | null>(null)
 
     const [tournaments, setTournaments] = useState<Tournament[]>([])
     const [archetypeConfigs, setArchetypeConfigs] = useState<Record<string, string[]>>({})
@@ -200,16 +200,19 @@ export default function MetaReport() {
     // Sub-filter States
     const [selectedTournamentId, setSelectedTournamentId] = useState<string>('')
     const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth())
+    const [selectedCategory, setSelectedCategory] = useState<'Advance' | 'Edison' | 'Genesis'>('Advance')
 
     useEffect(() => {
-        if (tournaments.length > 0 && !selectedTournamentId) {
-            setSelectedTournamentId(tournaments[0].id)
+        const categoryFiltered = tournaments.filter(t => (t.category || 'Advance') === selectedCategory);
+        if (categoryFiltered.length > 0 && (!selectedTournamentId || !categoryFiltered.find(t => t.id === selectedTournamentId))) {
+            setSelectedTournamentId(categoryFiltered[0].id)
         }
-    }, [tournaments, selectedTournamentId])
+    }, [tournaments, selectedTournamentId, selectedCategory])
 
-    const initialNewTournament = {
+    const initialNewTournament: Tournament = {
         id: '',
         name: '',
+        category: 'Advance',
         date: new Date().toISOString().split('T')[0],
         results: [{ playerName: '', top: 'Winner', archetype: '' }]
     };
@@ -272,16 +275,17 @@ export default function MetaReport() {
         setCardSuggestions([]);
     };
     const filteredTournaments = useMemo(() => {
+        const categoryFiltered = tournaments.filter(t => (t.category || 'Advance') === selectedCategory);
         if (viewType === 'Tournament' && selectedTournamentId) {
-            return tournaments.filter(t => t.id === selectedTournamentId);
+            return categoryFiltered.filter(t => t.id === selectedTournamentId);
         } else if (viewType === 'Month') {
-            return tournaments.filter(t => {
+            return categoryFiltered.filter(t => {
                 const d = new Date(t.date);
                 return d.getMonth() === selectedMonth;
             });
         }
-        return tournaments;
-    }, [tournaments, viewType, selectedTournamentId, selectedMonth]);
+        return categoryFiltered;
+    }, [tournaments, viewType, selectedTournamentId, selectedMonth, selectedCategory]);
 
     // Dynamic Chart Logic
     const chartData = useMemo(() => {
@@ -299,7 +303,7 @@ export default function MetaReport() {
 
         if (totalResults === 0) return [];
 
-        const colors = ['bg-blue-primary', 'bg-gold', 'bg-slate-400', 'bg-emerald-500', 'bg-rose-500', 'bg-purple-500', 'bg-indigo-400'];
+        const colors = ['bg-[#1a5bdf]', 'bg-[#d2ab3b]', 'bg-[#95a4ba]', 'bg-[#0bb269]', 'bg-[#f4f6f8]', 'bg-[#485b6e]', 'bg-indigo-400'];
 
         const sortedDecks = Object.entries(archetypeCounts)
             .map(([name, count]) => ({
@@ -331,7 +335,7 @@ export default function MetaReport() {
                 name: 'Other',
                 count: otherCount,
                 percentage: otherPercentage,
-                color: 'bg-slate-600'
+                color: 'bg-[#485b6e]'
             }
         ];
     }, [filteredTournaments]);
@@ -353,7 +357,6 @@ export default function MetaReport() {
             .slice(0, 3);
     }, [filteredTournaments]);
 
-    const displayData = hoveredSegment || (chartData.length > 0 ? { name: chartData[0].name, percentage: chartData[0].percentage } : null);
 
     const addPlayerRow = () => {
         const currentCount = newTournament.results.length;
@@ -478,7 +481,7 @@ export default function MetaReport() {
                                             onChange={(e) => setSelectedTournamentId(e.target.value)}
                                             className="bg-slate-800/80 border border-white/10 rounded-md px-2 py-1 text-[10px] font-black text-blue-primary uppercase outline-none"
                                         >
-                                            {tournaments.map(t => (
+                                            {tournaments.filter(t => (t.category || 'Advance') === selectedCategory).map(t => (
                                                 <option key={t.id} value={t.id} className="bg-slate-900">
                                                     {t.name} • {new Date(t.date).toLocaleDateString()}
                                                 </option>
@@ -501,6 +504,17 @@ export default function MetaReport() {
                             </div>
 
                             <div className="flex flex-wrap gap-2">
+                                <div className="flex bg-slate-800/50 p-1 rounded-lg border border-white/5 mr-4">
+                                    {(['Advance', 'Edison', 'Genesis'] as const).map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setSelectedCategory(cat)}
+                                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${selectedCategory === cat ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
                                 <div className="flex bg-slate-800/50 p-1 rounded-lg border border-white/5">
                                     {(['Format', 'Tournament', 'Month'] as ViewType[]).map(type => (
                                         <button
@@ -516,74 +530,142 @@ export default function MetaReport() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                            <div className="relative aspect-square flex items-center justify-center max-w-[300px] mx-auto w-full">
-                                <div className="absolute inset-0 rounded-full border-[20px] border-blue-primary/5"></div>
+                            <div className="relative aspect-square flex items-center justify-center max-w-[500px] mx-auto w-full">
+                                <div className="absolute inset-0 rounded-full border-[30px] border-blue-primary/5"></div>
                                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                                    <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" strokeWidth="12" className="text-blue-primary/20" />
+                                    <defs>
+                                        {chartData.map((item, idx) => {
+                                            // Calculate the center position of the slice
+                                            let offset = 0;
+                                            for (let i = 0; i < idx; i++) offset += chartData[i].percentage;
+                                            const midPercentage = offset + item.percentage / 2;
+                                            const midAngle = (midPercentage / 100) * 2 * Math.PI;
+
+                                            // The pattern Transform rotates by 90 around 50,50, so the internal coordinates correspond exactly to screen coordinates!
+                                            // Radius 25 pushes the center slightly outward closer to the ring
+                                            const rPos = 25;
+                                            const cx = 50 + Math.sin(midAngle) * rPos;
+                                            const cy = 50 - Math.cos(midAngle) * rPos;
+
+                                            // Make the image smaller so it doesn't leak out of the slice bounds
+                                            const imgSize = 40;
+                                            const halfSize = imgSize / 2;
+                                            const imgX = cx - halfSize;
+                                            const imgY = cy - halfSize;
+
+                                            const card1Id = cardMetadata[archetypeConfigs[item.name]?.[0]?.trim()?.toLowerCase()]?.id;
+                                            const card2Id = cardMetadata[archetypeConfigs[item.name]?.[1]?.trim()?.toLowerCase()]?.id;
+                                            const imgSrc1 = card1Id ? `https://images.ygoprodeck.com/images/cards_cropped/${card1Id}.jpg` : '';
+                                            const imgSrc2 = card2Id ? `https://images.ygoprodeck.com/images/cards_cropped/${card2Id}.jpg` : '';
+
+                                            const patternId = `pie-pattern-${item.name.replace(/[^a-zA-Z0-9]/g, '') || 'other'}`;
+                                            const colorFill = item.color.startsWith('bg-[') ? item.color.replace('bg-[', '').replace(']', '') : '#818cf8';
+
+                                            return (
+                                                <pattern key={patternId} id={patternId} patternUnits="userSpaceOnUse" x="0" y="0" width="100" height="100" patternTransform="rotate(90 50 50)">
+                                                    {/* Background fill just in case the smaller image doesn't cover everything */}
+                                                    <rect width="100" height="100" fill={colorFill} />
+                                                    {imgSrc1 && imgSrc2 ? (
+                                                        <>
+                                                            <image href={imgSrc1} x={imgX} y={imgY} width={halfSize} height={imgSize} preserveAspectRatio="xMidYMid slice" opacity="0.9" />
+                                                            <image href={imgSrc2} x={cx} y={imgY} width={halfSize} height={imgSize} preserveAspectRatio="xMidYMid slice" opacity="0.9" />
+                                                        </>
+                                                    ) : imgSrc1 ? (
+                                                        <image href={imgSrc1} x={imgX} y={imgY} width={imgSize} height={imgSize} preserveAspectRatio="xMidYMid slice" opacity="0.9" />
+                                                    ) : null}
+                                                </pattern>
+                                            );
+                                        })}
+                                    </defs>
+                                    <circle cx="50" cy="50" r="20" fill="transparent" stroke="currentColor" strokeWidth="40" className="text-background-dark/80" />
                                     {chartData.map((item, idx) => {
                                         let offset = 0;
                                         for (let i = 0; i < idx; i++) offset += chartData[i].percentage;
-                                        const strokeDasharray = "251.2";
-                                        const strokeDashoffset = (251.2 * (100 - item.percentage)) / 100;
-                                        const rotation = (offset / 100) * 360;
+                                        const C = 125.66; // 2 * PI * 20
+                                        const dash = Math.max(0, (item.percentage / 100) * C - 0.75);
+                                        const dashOffset = -((offset / 100) * C);
 
                                         return (
                                             <circle
                                                 key={item.name}
-                                                cx="50" cy="50" r="40"
+                                                cx="50" cy="50" r="20"
                                                 fill="transparent"
-                                                stroke="currentColor"
-                                                strokeWidth="12"
-                                                strokeDasharray={strokeDasharray}
-                                                strokeDashoffset={strokeDashoffset}
-                                                onMouseEnter={() => setHoveredSegment({ name: item.name, percentage: item.percentage })}
-                                                onMouseLeave={() => setHoveredSegment(null)}
+                                                stroke={`url(#pie-pattern-${item.name.replace(/[^a-zA-Z0-9]/g, '') || 'other'})`}
+                                                strokeWidth="40"
+                                                strokeDasharray={`${dash} ${C}`}
+                                                strokeDashoffset={dashOffset}
                                                 style={{
-                                                    transform: `rotate(${rotation}deg)`,
-                                                    transformOrigin: 'center',
                                                     cursor: 'pointer',
                                                     transition: 'all 0.3s ease'
                                                 }}
-                                                className={`${item.color.replace('bg-', 'text-')} hover:stroke-[14px]`}
+                                                className="hover:opacity-90"
                                             />
                                         );
                                     })}
                                 </svg>
-                                <div className="absolute flex flex-col items-center pointer-events-none animate-in fade-in duration-300 w-full h-full justify-center">
-                                    {displayData && (
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-20 -z-10 group/center rotate-12">
-                                            <ArchetypeAvatar
-                                                names={archetypeConfigs[displayData.name] || []}
-                                                metadata={cardMetadata}
-                                                size="size-48"
-                                                className="blur-[2px]"
-                                            />
+
+                                {chartData.map((item, idx) => {
+                                    let offset = 0;
+                                    for (let i = 0; i < idx; i++) offset += chartData[i].percentage;
+                                    const midPercentage = offset + item.percentage / 2;
+                                    const angle = (midPercentage / 100) * 2 * Math.PI - Math.PI / 2;
+
+                                    // Calculate label position (approx 25-30% from the center)
+                                    // Using 18% for a closer placement to the center
+                                    const rPos = 18;
+                                    const left = 50 + Math.cos(angle) * rPos;
+                                    const top = 50 + Math.sin(angle) * rPos;
+
+                                    return (
+                                        <div
+                                            key={`label-${item.name}`}
+                                            className="absolute flex flex-col items-center justify-center transform -translate-x-1/2 -translate-y-1/2 pointer-events-none drop-shadow-2xl"
+                                            style={{ left: `${left}%`, top: `${top}%` }}
+                                        >
+                                            <span className="text-white font-black italic tracking-tighter" style={{ fontSize: 'clamp(0.875rem, 1.5vw, 1.5rem)', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
+                                                {item.percentage.toFixed(0)}%
+                                            </span>
+                                            <span className="text-white font-black uppercase tracking-widest bg-black/70 px-1.5 py-0.5 rounded backdrop-blur-sm border border-white/20 truncate max-w-[80px] mt-0.5" style={{ fontSize: 'clamp(0.4rem, 0.75vw, 0.5rem)' }}>
+                                                {item.name}
+                                            </span>
                                         </div>
-                                    )}
-                                    <span className="text-5xl font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-                                        {displayData ? displayData.percentage.toFixed(0) : '0'}%
-                                    </span>
-                                    <span className="text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] px-4 text-center truncate max-w-[150px] bg-background-dark/40 backdrop-blur-sm py-1 rounded-full mt-1 border border-white/5">
-                                        {displayData ? displayData.name : 'Meta'}
-                                    </span>
-                                </div>
+                                    )
+                                })}
                             </div>
 
                             <div className="space-y-6">
                                 {chartData.length > 0 ? chartData.map((item, idx) => (
                                     <div key={idx} className="space-y-2 group">
                                         <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <ArchetypeAvatar
-                                                    names={archetypeConfigs[item.name] || []}
-                                                    metadata={cardMetadata}
-                                                    size="size-12"
-                                                    className={`border-2 shaow-lg ${item.color.replace('bg-', 'border-')}`}
-                                                />
-                                                <span className="text-xs font-bold text-slate-200">{item.name}</span>
+                                            <div className="flex items-center gap-3 w-4/5">
+                                                <div className="size-10 rounded-full bg-slate-800 border-2 border-slate-700/50 overflow-hidden shrink-0 shadow-lg relative">
+                                                    {archetypeConfigs[item.name]?.length > 0 && cardMetadata[archetypeConfigs[item.name][0]?.trim()?.toLowerCase()]?.id ? (
+                                                        <img
+                                                            src={`https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[archetypeConfigs[item.name][0].trim().toLowerCase()].id}.jpg`}
+                                                            className="w-full h-full object-cover"
+                                                            alt={item.name}
+                                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                                                            <span className="text-[10px] font-black text-white uppercase opacity-40">{item.name.charAt(0)}</span>
+                                                        </div>
+                                                    )}
+                                                    {archetypeConfigs[item.name]?.length > 1 && cardMetadata[archetypeConfigs[item.name][1]?.trim()?.toLowerCase()]?.id && (
+                                                        <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden border-l border-white/20">
+                                                            <img
+                                                                src={`https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[archetypeConfigs[item.name][1].trim().toLowerCase()].id}.jpg`}
+                                                                className="absolute h-full w-[200%] max-w-none object-cover left-[-100%]"
+                                                                alt={item.name}
+                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs font-black text-white tracking-tight truncate group-hover:text-blue-primary transition-colors cursor-pointer" onClick={() => openConfigModal(item.name)}>{item.name}</span>
                                                 <button
                                                     onClick={() => openConfigModal(item.name)}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded"
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded ml-2"
                                                 >
                                                     <span className="material-symbols-outlined text-[12px] text-slate-500">settings</span>
                                                 </button>
@@ -792,10 +874,18 @@ export default function MetaReport() {
                         </div>
 
                         <form onSubmit={submitTournament} className="p-10 space-y-10 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Event Designation</label>
                                     <input required type="text" value={newTournament.name} onChange={(e) => setNewTournament({ ...newTournament, name: e.target.value })} placeholder="e.g. Regional Championship" className="w-full bg-white/5 border-2 border-white/5 hover:border-blue-primary/30 rounded-xl px-5 py-4 text-sm text-white focus:border-blue-primary outline-none transition-all placeholder:text-slate-700 font-bold" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Category</label>
+                                    <select value={newTournament.category} onChange={(e) => setNewTournament({ ...newTournament, category: e.target.value as any })} className="w-full bg-white/5 border-2 border-white/5 hover:border-blue-primary/30 rounded-xl px-5 py-4 text-sm text-white focus:border-blue-primary outline-none transition-all font-bold cursor-pointer">
+                                        <option className="bg-slate-900" value="Advance">Advance</option>
+                                        <option className="bg-slate-900" value="Edison">Edison</option>
+                                        <option className="bg-slate-900" value="Genesis">Genesis</option>
+                                    </select>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Chronology</label>

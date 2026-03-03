@@ -33,6 +33,19 @@ export default function DuelSimulator() {
     const [hand, setHand] = useState<string[]>([]);
     const [gy, setGy] = useState<string[]>([]);
     const [banish, setBanish] = useState<string[]>([]);
+    const [turnPlayer, setTurnPlayer] = useState<string | null>(null);
+    const [currentPhase, setCurrentPhase] = useState<'DP' | 'SP' | 'M1' | 'BP' | 'M2' | 'EP'>('DP');
+    const [rpsState, setRpsState] = useState<{
+        phase: 'hidden' | 'choosing' | 'revealing' | 'finished';
+        localChoice: 'rock' | 'paper' | 'scissors' | null;
+        oppChoice: 'rock' | 'paper' | 'scissors' | null;
+        winner: string | null;
+    }>({
+        phase: 'hidden',
+        localChoice: null,
+        oppChoice: null,
+        winner: null
+    });
 
     interface FieldCard {
         img: string;
@@ -60,7 +73,9 @@ export default function DuelSimulator() {
         gySize: 0,
         banishSize: 0,
         extraSize: 0,
-        fieldCards: {} as Record<string, FieldCard | undefined>
+        fieldCards: {} as Record<string, FieldCard | undefined>,
+        currentPhase: 'DP' as 'DP' | 'SP' | 'M1' | 'BP' | 'M2' | 'EP',
+        turnPlayer: null as string | null
     });
 
     useEffect(() => {
@@ -71,9 +86,11 @@ export default function DuelSimulator() {
             gySize: gy.length,
             banishSize: banish.length,
             extraSize: extraDeck.length,
-            fieldCards
+            fieldCards,
+            currentPhase,
+            turnPlayer
         };
-    }, [lp, deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards]);
+    }, [lp, deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards, currentPhase, turnPlayer]);
 
     const handleCardHover = async (imgUrl: string | undefined) => {
         if (!imgUrl || imgUrl.includes('card-back') || imgUrl.startsWith('data:')) return;
@@ -106,8 +123,56 @@ export default function DuelSimulator() {
         gySize: 0,
         banishSize: 0,
         extraSize: 0,
-        fieldCards: {} as Record<string, FieldCard | undefined>
+        fieldCards: {} as Record<string, FieldCard | undefined>,
+        currentPhase: 'DP' as 'DP' | 'SP' | 'M1' | 'BP' | 'M2' | 'EP',
+        turnPlayer: null as string | null
     });
+
+    const latestRoomRef = useRef<DuelRoom | null>(null);
+    useEffect(() => { latestRoomRef.current = room; }, [room]);
+
+    const latestUserRef = useRef<any>(null);
+    useEffect(() => { latestUserRef.current = user; }, [user]);
+
+    const sessionRef = useRef<string | null>(null);
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data }) => {
+            sessionRef.current = data.session?.access_token || null;
+        });
+    }, []);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            const currentRoom = latestRoomRef.current;
+            const currentUser = latestUserRef.current;
+            if (currentRoom && currentUser && currentUser.id === currentRoom.host_id) {
+                const supabaseUrl = import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+                const supabaseKey = import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+                if (supabaseUrl && supabaseKey) {
+                    const deleteUrl = `${supabaseUrl}/rest/v1/duel_rooms?id=eq.${currentRoom.id}`;
+                    fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: {
+                            'apikey': supabaseKey,
+                            'Authorization': `Bearer ${sessionRef.current || supabaseKey}`
+                        },
+                        keepalive: true
+                    }).catch(() => { });
+                }
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            const currentRoom = latestRoomRef.current;
+            const currentUser = latestUserRef.current;
+            if (currentRoom && currentUser && currentUser.id === currentRoom.host_id) {
+                supabase.from('duel_rooms').delete().eq('id', currentRoom.id).then();
+            }
+        };
+    }, []);
 
     const handleDragStart = (e: React.DragEvent, card: string, sourceId: string) => {
         e.dataTransfer.setData('cardImg', card);
@@ -413,6 +478,12 @@ export default function DuelSimulator() {
 
     useEffect(() => {
         if (!room?.id || !user?.id) return;
+
+        // If both players are present and RPS hasn't started/finished, start it
+        if (room.host_id && room.opponent_id && rpsState.phase === 'hidden') {
+            setRpsState(prev => ({ ...prev, phase: 'choosing' }));
+        }
+
         const subscription = supabase
             .channel(`room:${room.id}`, {
                 config: {
@@ -425,6 +496,13 @@ export default function DuelSimulator() {
             .on('broadcast', { event: 'sync_state' }, (payload) => {
                 if (payload.payload.playerId !== user.id) {
                     setOppState(payload.payload.state);
+                    // Sync turn player and phase if it's dictated by the opponent (or we just accept the latest sync to stay in sync)
+                    // The opponent syncs their view of the current phase and turn player.
+                    // We only accept external sync for these fields if it's the other player's turn, to avoid race conditions.
+                    if (payload.payload.state.turnPlayer && payload.payload.state.turnPlayer !== user.id) {
+                        setTurnPlayer(payload.payload.state.turnPlayer);
+                        setCurrentPhase(payload.payload.state.currentPhase);
+                    }
                 }
             })
             .on('broadcast', { event: 'request_sync' }, (payload) => {
@@ -436,6 +514,17 @@ export default function DuelSimulator() {
                             playerId: user.id,
                             state: localStateRef.current
                         }
+                    });
+                }
+            })
+            .on('broadcast', { event: 'rps_choice' }, (payload) => {
+                if (payload.payload.playerId !== user.id) {
+                    setRpsState(prev => {
+                        const newState = { ...prev, oppChoice: payload.payload.choice };
+                        if (newState.localChoice && newState.oppChoice) {
+                            newState.phase = 'revealing';
+                        }
+                        return newState;
                     });
                 }
             })
@@ -456,7 +545,65 @@ export default function DuelSimulator() {
             supabase.removeChannel(subscription);
             channelRef.current = null;
         };
-    }, [room?.id, user?.id]);
+    }, [room?.id, room?.host_id, room?.opponent_id, user?.id, rpsState.phase]);
+
+    // Handle RPS Resolution
+    useEffect(() => {
+        if (rpsState.phase === 'revealing' && rpsState.localChoice && rpsState.oppChoice) {
+            let winnerId: string | null = null;
+            const p1 = rpsState.localChoice;
+            const p2 = rpsState.oppChoice;
+            const isHost = user?.id === room?.host_id;
+
+            if (p1 === p2) {
+                // Tie
+                setTimeout(() => {
+                    setRpsState({ phase: 'choosing', localChoice: null, oppChoice: null, winner: null });
+                }, 2500);
+            } else {
+                if (
+                    (p1 === 'rock' && p2 === 'scissors') ||
+                    (p1 === 'paper' && p2 === 'rock') ||
+                    (p1 === 'scissors' && p2 === 'paper')
+                ) {
+                    winnerId = user!.id;
+                } else {
+                    winnerId = isHost ? room!.opponent_id : room!.host_id;
+                }
+
+                setRpsState(prev => ({ ...prev, winner: winnerId }));
+
+                setTimeout(() => {
+                    setRpsState(prev => ({ ...prev, phase: 'finished' }));
+                    if (winnerId) {
+                        setTurnPlayer(winnerId);
+                        setCurrentPhase('DP');
+                    }
+                }, 3000);
+            }
+        }
+    }, [rpsState.phase, rpsState.localChoice, rpsState.oppChoice, user, room]);
+
+    const handleRpsChoice = (choice: 'rock' | 'paper' | 'scissors') => {
+        setRpsState(prev => {
+            const newState = { ...prev, localChoice: choice };
+            if (newState.oppChoice) {
+                newState.phase = 'revealing';
+            }
+            return newState;
+        });
+
+        if (channelRef.current && user) {
+            channelRef.current.send({
+                type: 'broadcast',
+                event: 'rps_choice',
+                payload: {
+                    playerId: user.id,
+                    choice: choice
+                }
+            });
+        }
+    };
 
     useEffect(() => {
         if (!channelRef.current || !room || !user) return;
@@ -472,11 +619,13 @@ export default function DuelSimulator() {
                     gySize: gy.length,
                     banishSize: banish.length,
                     extraSize: extraDeck.length,
-                    fieldCards: fieldCards
+                    fieldCards: fieldCards,
+                    currentPhase: currentPhase,
+                    turnPlayer: turnPlayer
                 }
             }
         });
-    }, [deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards, lp, room, user]);
+    }, [deck.length, hand, gy.length, banish.length, extraDeck.length, fieldCards, lp, currentPhase, turnPlayer, room, user]);
 
     // Auto-join as opponent
     useEffect(() => {
@@ -505,6 +654,10 @@ export default function DuelSimulator() {
     const myAvatar = isHost ? room?.host_avatar : (room?.opponent_avatar || user?.user_metadata?.avatar_url);
     const oppUsername = isHost ? (room?.opponent_username || 'Waiting...') : room?.host_username;
     const oppAvatar = isHost ? room?.opponent_avatar : room?.host_avatar;
+
+    const amITurnPlayer = turnPlayer === user?.id;
+    const isOpponentTurnPlayer = turnPlayer === (isHost ? room?.opponent_id : room?.host_id);
+    const activePhaseToRender = amITurnPlayer ? currentPhase : (isOpponentTurnPlayer ? oppState.currentPhase : 'DP');
 
     if (loading) {
         return (
@@ -558,6 +711,91 @@ export default function DuelSimulator() {
                 </div>
             )}
 
+            {/* RPS Minigame Overlay */}
+            {rpsState.phase !== 'hidden' && rpsState.phase !== 'finished' && (
+                <div className="absolute inset-0 bg-black/90 backdrop-blur-xl z-[60] flex flex-col items-center justify-center">
+                    <div className="glassmorphism rounded-2xl p-10 text-center max-w-2xl mx-auto w-full relative overflow-hidden border-[#7f13ec]/50 shadow-[0_0_50px_rgba(127,19,236,0.3)]">
+                        <h2 className="text-4xl font-black italic uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-[#00f2ff] to-[#7f13ec] mb-8">
+                            Rock Paper Scissors
+                        </h2>
+
+                        {rpsState.phase === 'choosing' && (
+                            <>
+                                <p className="text-xl text-white/80 mb-8 font-bold">Choose your weapon to decide who goes first!</p>
+                                <div className="flex justify-center gap-6">
+                                    <button
+                                        onClick={() => handleRpsChoice('rock')}
+                                        disabled={!!rpsState.localChoice}
+                                        className={`w-32 h-32 rounded-2xl bg-black/50 border-2 ${rpsState.localChoice === 'rock' ? 'border-[#00f2ff] shadow-[0_0_20px_rgba(0,242,255,0.5)]' : 'border-white/20 hover:border-[#7f13ec] hover:-translate-y-2'} flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-50`}
+                                    >
+                                        <span className="text-5xl">👊</span>
+                                        <span className="font-bold text-sm tracking-wider">ROCK</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleRpsChoice('paper')}
+                                        disabled={!!rpsState.localChoice}
+                                        className={`w-32 h-32 rounded-2xl bg-black/50 border-2 ${rpsState.localChoice === 'paper' ? 'border-[#00f2ff] shadow-[0_0_20px_rgba(0,242,255,0.5)]' : 'border-white/20 hover:border-[#7f13ec] hover:-translate-y-2'} flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-50`}
+                                    >
+                                        <span className="text-5xl">🖐️</span>
+                                        <span className="font-bold text-sm tracking-wider">PAPER</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleRpsChoice('scissors')}
+                                        disabled={!!rpsState.localChoice}
+                                        className={`w-32 h-32 rounded-2xl bg-black/50 border-2 ${rpsState.localChoice === 'scissors' ? 'border-[#00f2ff] shadow-[0_0_20px_rgba(0,242,255,0.5)]' : 'border-white/20 hover:border-[#7f13ec] hover:-translate-y-2'} flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-50`}
+                                    >
+                                        <span className="text-5xl">✌️</span>
+                                        <span className="font-bold text-sm tracking-wider">SCISSORS</span>
+                                    </button>
+                                </div>
+                                {rpsState.localChoice && !rpsState.oppChoice && (
+                                    <p className="mt-8 text-[#00f2ff] font-bold animate-pulse">Waiting for opponent...</p>
+                                )}
+                            </>
+                        )}
+
+                        {rpsState.phase === 'revealing' && (
+                            <div className="flex flex-col items-center">
+                                <div className="flex justify-center items-center gap-12 mb-8">
+                                    <div className="text-center">
+                                        <p className="text-sm font-bold text-white/50 mb-4">{myUsername}</p>
+                                        <div className="w-32 h-32 rounded-2xl bg-white/10 border-2 border-[#00f2ff] flex items-center justify-center text-6xl shadow-[0_0_30px_rgba(0,242,255,0.3)] transform transition-transform animate-bounce">
+                                            {rpsState.localChoice === 'rock' ? '👊' : rpsState.localChoice === 'paper' ? '🖐️' : '✌️'}
+                                        </div>
+                                    </div>
+                                    <div className="text-4xl font-black text-white/30 italic">VS</div>
+                                    <div className="text-center">
+                                        <p className="text-sm font-bold text-white/50 mb-4">{oppUsername}</p>
+                                        <div className="w-32 h-32 rounded-2xl bg-white/10 border-2 border-[#7f13ec] flex items-center justify-center text-6xl shadow-[0_0_30px_rgba(127,19,236,0.3)] transform transition-transform animate-bounce" style={{ animationDelay: '0.1s' }}>
+                                            {rpsState.oppChoice === 'rock' ? '👊' : rpsState.oppChoice === 'paper' ? '🖐️' : '✌️'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {rpsState.winner && (
+                                    <div className="mt-8 animate-[popIn_0.5s_ease-out_forwards]">
+                                        <h3 className="text-3xl font-bold mb-2">
+                                            {rpsState.localChoice === rpsState.oppChoice ? (
+                                                <span className="text-yellow-400">DRAW!</span>
+                                            ) : rpsState.winner === user?.id ? (
+                                                <span className="text-[#00f2ff]">YOU WON!</span>
+                                            ) : (
+                                                <span className="text-red-500">YOU LOST!</span>
+                                            )}
+                                        </h3>
+                                        {rpsState.localChoice !== rpsState.oppChoice && (
+                                            <p className="text-[#00f2ff] text-xl font-bold animate-pulse">
+                                                ¡Empieza {rpsState.winner === user?.id ? myUsername : oppUsername}!
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* ═══ MAIN: Left Panel + Duel Field + Right Panel ═══ */}
             <main className="flex-1 flex overflow-hidden relative">
 
@@ -565,10 +803,10 @@ export default function DuelSimulator() {
                 <aside className="w-72 p-6 flex flex-col gap-6 glassmorphism border-r border-[#7f13ec]/10 shrink-0">
 
                     {/* Turn Tracker */}
-                    <div className="w-full py-2 bg-black/40 rounded-lg border border-[#00f2ff]/30 flex flex-col items-center justify-center gap-1 shadow-lg shrink-0">
-                        <span className="text-[#00f2ff] font-bold animate-pulse tracking-widest text-sm">YOUR TURN</span>
-                        <div className="w-1/2 h-[1px] bg-[#00f2ff]/20"></div>
-                        <span className="text-white/60 text-[10px] tracking-widest">TURN 03</span>
+                    <div className={`w-full py-2 bg-black/40 rounded-lg border ${amITurnPlayer ? 'border-[#00f2ff]/50' : 'border-red-500/50'} flex flex-col items-center justify-center gap-1 shadow-lg shrink-0 transition-colors duration-500`}>
+                        <span className={`${amITurnPlayer ? 'text-[#00f2ff]' : 'text-red-500'} font-bold animate-pulse tracking-widest text-sm uppercase`}>
+                            {amITurnPlayer ? 'YOUR TURN' : "OPPONENT'S TURN"}
+                        </span>
                     </div>
 
                     {/* Opponent Info & LP */}
@@ -635,10 +873,45 @@ export default function DuelSimulator() {
                 </aside>
 
                 {/* ── CENTER: Duel Field ── */}
-                <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden min-h-0">
+                <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden min-h-0 pt-16">
+
+                    {/* PHASE BUTTONS (Absolute Top Center) */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 w-full flex justify-center items-center z-[25] pointer-events-auto">
+                        <div className="flex gap-1 md:gap-2 bg-black/60 backdrop-blur-md p-1 md:p-1.5 rounded-xl border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                            {(['DP', 'SP', 'M1', 'BP', 'M2', 'EP'] as const).map(phase => {
+                                const isActive = activePhaseToRender === phase;
+                                return (
+                                    <button
+                                        key={phase}
+                                        onClick={() => {
+                                            if (amITurnPlayer) {
+                                                setCurrentPhase(phase);
+                                                if (phase === 'EP') {
+                                                    // End turn, passing to opponent
+                                                    setTurnPlayer(isHost ? room?.opponent_id || null : room?.host_id || null);
+                                                    setCurrentPhase('DP');
+                                                }
+                                            }
+                                        }}
+                                        disabled={!amITurnPlayer}
+                                        className={`
+                                            px-2 py-1 md:px-3 md:py-1 rounded-lg font-black text-[10px] md:text-xs tracking-wider transition-all duration-300
+                                            ${isActive
+                                                ? `bg-gradient-to-r from-[#00f2ff]/20 to-[#7f13ec]/20 text-[#00f2ff] border border-[#00f2ff]/50 shadow-[0_0_15px_rgba(0,242,255,0.4)] scale-110 z-10 ${amITurnPlayer ? 'hover:scale-115' : ''}`
+                                                : 'bg-black/40 text-white/30 border border-transparent hover:text-white/60'}
+                                            ${amITurnPlayer && !isActive ? 'hover:bg-white/10 cursor-pointer hover:border-white/20' : ''}
+                                            ${!amITurnPlayer ? 'cursor-default' : ''}
+                                        `}
+                                    >
+                                        {phase}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
 
                     {/* Opponent Hand Display */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 flex -space-x-8 pt-4 z-20 pointer-events-none">
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex -space-x-8 pt-0 z-20 pointer-events-none">
                         {oppState.hand.map((_, i) => {
                             const total = oppState.hand.length;
                             const maxRot = 15;
@@ -649,9 +922,9 @@ export default function DuelSimulator() {
                             return (
                                 <div
                                     key={`opp-hand-${i}`}
-                                    className="w-[60px] h-[85px] sm:w-[72px] sm:h-[104px] rounded-sm border-2 border-[#a87f4c] shadow-md shadow-black/80"
+                                    className="w-[50px] h-[70px] sm:w-[60px] sm:h-[85px] rounded-sm border-2 border-[#a87f4c] shadow-md shadow-black/80"
                                     style={{
-                                        transform: `rotate(${180 - rotation}deg) translateY(${yOffset}px)`,
+                                        transform: `rotate(${180 - rotation}deg) translateY(${yOffset - 15}px)`,
                                         transformOrigin: 'bottom center',
                                         background: 'repeating-linear-gradient(45deg, #1b0726, #1b0726 10px, #0f0314 10px, #0f0314 20px)'
                                     }}

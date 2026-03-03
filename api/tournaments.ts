@@ -15,6 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const formattedData = data.map(tournament => ({
                 id: tournament.id.toString(),
                 name: tournament.name,
+                category: tournament.category || 'Advance',
                 date: new Date(tournament.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                 results: tournament.tournament_results.map((r: any) => ({
                     playerName: r.player_name,
@@ -31,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST: Save or Update tournament (merged save-tournament.ts and update-tournament.ts)
     if (req.method === 'POST') {
-        const { id, name, date, results } = req.body;
+        const { id, name, category, date, results } = req.body;
         if (!name || !date || !results || !Array.isArray(results)) {
             return res.status(400).json({ error: 'Missing required tournament data' });
         }
@@ -43,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // Update
                 const { error: tError } = await supabase
                     .from('tournaments')
-                    .update({ name, date })
+                    .update({ name, category, date })
                     .eq('id', id);
                 if (tError) throw tError;
 
@@ -57,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // Create
                 const { data: tournament, error: tError } = await supabase
                     .from('tournaments')
-                    .insert({ name, date })
+                    .insert({ name, category: category || 'Advance', date })
                     .select()
                     .single();
                 if (tError) throw tError;

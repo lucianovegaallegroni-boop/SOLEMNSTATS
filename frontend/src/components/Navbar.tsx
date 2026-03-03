@@ -10,11 +10,11 @@ function Navbar() {
     const navLinks = [
         { to: '/', label: 'Import', icon: 'upload_file' },
         { to: '/decks', label: 'My Decks', icon: 'style' },
-        { to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
+        //{ to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
         { to: '/meta-report', label: 'Meta Report', icon: 'insights' },
         { to: '/market', label: 'Market', icon: 'storefront' },
         { to: '/lobby', label: 'Lobby', icon: 'radar' },
-        { to: '#', label: 'Card DB', icon: 'search' },
+        //{ to: '#', label: 'Card DB', icon: 'search' },
     ]
 
     const desktopLinkClass = (path: string) =>
