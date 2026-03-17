@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App'
 import Home from './pages/Home'
+import Import from './pages/Import'
 import Dashboard from './pages/Dashboard'
 import ComboTracker from './pages/ComboTracker'
 import Decks from './pages/Decks'
@@ -12,6 +13,7 @@ import Login from './pages/Login'
 import Profile from './pages/Profile'
 import MetaReport from './pages/MetaReport'
 import Market from './pages/Market'
+import League from './pages/League'
 import DuelSimulator from './pages/DuelSimulator'
 import DuelLobby from './pages/DuelLobby'
 import './index.css'
@@ -22,10 +24,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<App />}>
           <Route index element={<Home />} />
+          <Route path="import" element={<Import />} />
           <Route path="login" element={<Login />} />
           <Route path="profile" element={<Profile />} />
           <Route path="meta-report" element={<MetaReport />} />
           <Route path="market" element={<Market />} />
+          <Route path="league" element={<League />} />
           <Route path="dashboard/:id" element={<Dashboard />} />
           <Route path="combos/:id" element={<Combos />} />
           <Route path="combo" element={<ComboTracker />} />

@@ -128,11 +128,16 @@ export default function MetaReport() {
     const [cardSuggestions, setCardSuggestions] = useState<any[]>([])
     const [showSuggestions, setShowSuggestions] = useState(false)
     const [cardMetadata, setCardMetadata] = useState<Record<string, any>>({})
+    const [playerConfigs, setPlayerConfigs] = useState<Record<string, string[]>>({})
+    const [showPlayerConfigModal, setShowPlayerConfigModal] = useState(false)
+    const [activeConfigPlayer, setActiveConfigPlayer] = useState<string>('')
+    const [playerCardNames, setPlayerCardNames] = useState<string>('')
 
     // Fetch data on mount
     useEffect(() => {
         fetchTournaments()
         fetchArchetypeConfigs()
+        fetchPlayerConfigs()
     }, [])
 
     const fetchTournaments = async () => {
@@ -180,6 +185,29 @@ export default function MetaReport() {
             }
         } catch (err) {
             console.error('Failed to fetch configs:', err)
+        }
+    }
+
+    const fetchPlayerConfigs = async () => {
+        try {
+            const res = await fetch('/api/players')
+            const data = await res.json()
+            if (Array.isArray(data)) {
+                const configMap: Record<string, string[]> = {}
+                const allCardNames = new Set<string>()
+                data.forEach((p: any) => {
+                    configMap[p.name] = (p.card_names || []).map((n: string) => n.trim());
+                    configMap[p.name].forEach((name: string) => {
+                        if (name) allCardNames.add(name);
+                    });
+                })
+                setPlayerConfigs(configMap)
+                if (allCardNames.size > 0) {
+                    fetchMetadata(Array.from(allCardNames))
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch player configs:', err)
         }
     }
 
@@ -394,19 +422,44 @@ export default function MetaReport() {
     }
 
     const saveArchetypeConfig = async () => {
-        const cardNames = configCardNames.split(',').map(s => s.trim()).filter(s => s !== '').slice(0, 2);
+        if (!activeConfigArchetype) return
+        const cardNames = configCardNames.split(',').map(s => s.trim()).filter(s => s !== '')
         try {
             const res = await fetch('/api/archetypes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: activeConfigArchetype, card_names: cardNames })
+                body: JSON.stringify({ name: activeConfigArchetype, cardNames })
             })
             if (res.ok) {
-                setShowConfigModal(false);
-                fetchArchetypeConfigs();
+                setShowConfigModal(false)
+                fetchArchetypeConfigs()
             }
         } catch (err) {
-            console.error('Failed to save config:', err)
+            console.error('Save failed:', err)
+        }
+    }
+
+    const openPlayerConfigModal = (playerName: string) => {
+        setActiveConfigPlayer(playerName)
+        setPlayerCardNames((playerConfigs[playerName] || []).join(', '))
+        setShowPlayerConfigModal(true)
+    }
+
+    const savePlayerConfig = async () => {
+        if (!activeConfigPlayer) return
+        const cardNames = playerCardNames.split(',').map(s => s.trim()).filter(s => s !== '')
+        try {
+            const res = await fetch('/api/players', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: activeConfigPlayer, cardNames })
+            })
+            if (res.ok) {
+                setShowPlayerConfigModal(false)
+                fetchPlayerConfigs()
+            }
+        } catch (err) {
+            console.error('Save player config failed:', err)
         }
     }
 
@@ -688,14 +741,25 @@ export default function MetaReport() {
 
                     {/* Top Cut Table */}
                     <div className="glass rounded-xl overflow-hidden shadow-2xl border border-white/5">
-                        <div className="p-6 border-b border-blue-primary/10 flex justify-between items-center">
+                        <div className="p-6 border-b border-blue-primary/10 flex justify-between items-center transition-all">
                             <div>
                                 <h2 className="text-xl font-bold text-white tracking-tight italic">Registry</h2>
                                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Tournament History</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className={`size-2 rounded-full ${loading ? 'bg-blue-primary animate-pulse' : 'bg-emerald-500'} `}></span>
-                                <span className="text-[10px] font-black uppercase text-slate-400">{loading ? 'Syncing...' : 'Live Records'}</span>
+                            <div className="flex items-center gap-4">
+                                <div className="hidden md:flex items-center gap-2">
+                                    <span className={`size-2 rounded-full ${loading ? 'bg-blue-primary animate-pulse' : 'bg-emerald-500'} `}></span>
+                                    <span className="text-[10px] font-black uppercase text-slate-400">{loading ? 'Syncing...' : 'Live Records'}</span>
+                                </div>
+                                {isAuthorized && (
+                                    <button
+                                        onClick={() => { setIsEditing(false); setNewTournament(initialNewTournament); setShowModal(true); }}
+                                        className="bg-blue-primary/10 hover:bg-blue-primary text-blue-primary hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-blue-primary/30"
+                                    >
+                                        <span className="material-symbols-outlined text-xs">add_circle</span>
+                                        Add Event
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
@@ -719,13 +783,13 @@ export default function MetaReport() {
                                                 </td>
                                                 <td className="px-6 py-5 text-slate-500 font-medium">{tournament.date}</td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-3">
-                                                        <img
-                                                            className="size-7 rounded-full border border-blue-primary/40 p-[1px]"
-                                                            src={`https://ui-avatars.com/api/?name=${result.playerName}&background=135bec&color=fff&bold=true`}
-                                                            alt="Avatar"
+                                                    <div className="flex items-center gap-3 cursor-pointer group/player" onClick={() => openPlayerConfigModal(result.playerName)}>
+                                                        <ArchetypeAvatar
+                                                            names={playerConfigs[result.playerName] || []}
+                                                            metadata={cardMetadata}
+                                                            size="size-7"
                                                         />
-                                                        <span className="font-bold text-slate-300 group-hover:text-blue-primary font-mono text-xs">{result.playerName}</span>
+                                                        <span className="font-bold text-slate-300 group-hover/player:text-blue-primary font-mono text-xs">{result.playerName}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
@@ -1050,6 +1114,74 @@ export default function MetaReport() {
                     </div>
                 </div>
             )}
+
+            {showPlayerConfigModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-background-dark/95 backdrop-blur-md" onClick={() => setShowPlayerConfigModal(false)} />
+                    <div className="glass w-full max-w-md rounded-2xl overflow-hidden relative z-10 border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-emerald-500/5">
+                            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Player Configuration</h2>
+                            <button onClick={() => setShowPlayerConfigModal(false)}>
+                                <span className="material-symbols-outlined text-slate-400 hover:text-white transition-colors">close</span>
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-4 text-center">
+                                <div className="flex justify-center gap-4">
+                                    {playerCardNames.split(',').map(s => s.trim()).filter(s => s !== '').slice(0, 2).map((cardName, idx) => (
+                                        <div key={idx} className="relative group/card">
+                                            <div className="size-20 rounded-2xl bg-slate-800 border-2 border-emerald-500/40 overflow-hidden shadow-lg shadow-emerald-500/10 relative">
+                                                <img
+                                                    src={cardMetadata[cardName.trim().toLowerCase()]?.id
+                                                        ? `https://images.ygoprodeck.com/images/cards_cropped/${cardMetadata[cardName.trim().toLowerCase()].id}.jpg`
+                                                        : undefined}
+                                                    className="w-full h-full object-cover"
+                                                    alt={cardName}
+                                                    onError={(e) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-background-dark size-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-lg">
+                                                {idx + 1}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {playerCardNames.split(',').map(s => s.trim()).filter(s => s !== '').length === 0 && (
+                                        <div className="size-20 rounded-2xl bg-emerald-500/5 flex items-center justify-center border-2 border-dashed border-emerald-500/20">
+                                            <span className="material-symbols-outlined text-emerald-500/30 text-3xl">person</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{activeConfigPlayer}</h3>
+                                    <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">Assign signature cards to this player</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 relative">
+                                <label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Card Names (Separate by comma)</label>
+                                <input
+                                    type="text"
+                                    value={playerCardNames}
+                                    onChange={(e) => setPlayerCardNames(e.target.value)}
+                                    placeholder="e.g. Blue-Eyes White Dragon, Dark Magician"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-emerald-500 transition-all font-bold"
+                                />
+                                <p className="text-[9px] text-slate-600 italic">Assign representative cards for the player avatar.</p>
+                            </div>
+
+                            <button
+                                onClick={savePlayerConfig}
+                                className="w-full py-4 bg-emerald-500 rounded-xl text-[10px] font-black uppercase tracking-widest text-background-dark shadow-xl shadow-emerald-500/10 hover:bg-emerald-400 transition-all active:scale-95"
+                            >
+                                Save Player config
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
-    )
+    );
 }

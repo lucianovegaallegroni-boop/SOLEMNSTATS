@@ -98,7 +98,7 @@ function Decks() {
                     <h1 className="text-4xl font-bold tracking-tight text-white uppercase italic">My <span className="text-primary">Decks</span></h1>
                     <p className="text-slate-500 font-medium uppercase tracking-widest text-xs mt-2">Manage and analyze your saved deck collections</p>
                 </div>
-                <Link to="/" className="bg-primary/10 border border-primary/20 text-primary px-6 py-2 rounded-lg font-bold text-sm hover:bg-primary/20 transition-all flex items-center gap-2">
+                <Link to="/import" className="bg-primary/10 border border-primary/20 text-primary px-6 py-2 rounded-lg font-bold text-sm hover:bg-primary/20 transition-all flex items-center gap-2">
                     <span className="material-icons text-sm">add_circle</span>
                     New Deck
                 </Link>
@@ -109,7 +109,7 @@ function Decks() {
                     <span className="material-icons text-6xl text-slate-700 mb-4">folder_off</span>
                     <h3 className="text-xl font-bold text-slate-400">No decks found</h3>
                     <p className="text-slate-600 mb-6">Import your first deck to see it here.</p>
-                    <Link to="/" className="inline-flex items-center justify-center px-8 py-3 bg-primary text-background-dark rounded-lg font-bold hover:bg-[#c19a2e] transition-all">
+                    <Link to="/import" className="inline-flex items-center justify-center px-8 py-3 bg-primary text-background-dark rounded-lg font-bold hover:bg-[#c19a2e] transition-all">
                         Import Now
                     </Link>
                 </div>

@@ -7,15 +7,25 @@ function Navbar() {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const { user, signOut } = useAuth()
 
+    const isAdmin = user?.user_metadata?.username === 'SerSupremo' || 
+                    user?.user_metadata?.role === 'admin' || 
+                    user?.app_metadata?.role === 'admin';
+
     const navLinks = [
-        { to: '/', label: 'Import', icon: 'upload_file' },
-        { to: '/decks', label: 'My Decks', icon: 'style' },
-        //{ to: '/combo', label: 'Combo Tracker', icon: 'account_tree' },
+        { to: '/', label: 'Home', icon: 'home' },
+        { to: '/import', label: 'Import', icon: 'upload_file', private: true },
+        { to: '/decks', label: 'My Decks', icon: 'style', private: true },
         { to: '/meta-report', label: 'Meta Report', icon: 'insights' },
         { to: '/market', label: 'Market', icon: 'storefront' },
-        { to: '/lobby', label: 'Lobby', icon: 'radar' },
-        //{ to: '#', label: 'Card DB', icon: 'search' },
+        { to: '/league', label: 'League', icon: 'emoji_events' },
+        { to: '/lobby', label: 'Lobby', icon: 'radar', adminOnly: true },
     ]
+
+    const filteredLinks = navLinks.filter(link => {
+        if (link.adminOnly) return isAdmin;
+        if (link.private) return !!user;
+        return true;
+    });
 
     const desktopLinkClass = (path: string) =>
         `${location.pathname === path ? 'text-primary border-b-2 border-primary' : 'text-slate-500 hover:text-primary transition-colors'} py-5`
@@ -47,7 +57,7 @@ function Navbar() {
 
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center space-x-8 text-sm font-medium">
-                            {navLinks.map(link => (
+                            {filteredLinks.map(link => (
                                 link.to.startsWith('/') ? (
                                     <Link key={link.label} className={desktopLinkClass(link.to)} to={link.to}>{link.label}</Link>
                                 ) : (
@@ -121,7 +131,7 @@ function Navbar() {
 
                 {/* Sidebar Links */}
                 <div className="py-4 flex flex-col gap-1 px-3">
-                    {navLinks.map(link => {
+                    {filteredLinks.map(link => {
                         const isActive = location.pathname === link.to
                         const inner = (
                             <div className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-bold uppercase tracking-wider transition-all ${isActive

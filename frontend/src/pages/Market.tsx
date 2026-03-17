@@ -240,16 +240,69 @@ export default function Market() {
         }
     };
 
+    const processImages = async (files: File[], isSellMode = false) => {
+        const convertToBase64 = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const max_size = 600; // Resize to reasonable dimensions
+                        if (width > height) {
+                            if (width > max_size) {
+                                height = Math.round((height * max_size) / width);
+                                width = max_size;
+                            }
+                        } else {
+                            if (height > max_size) {
+                                width = Math.round((width * max_size) / height);
+                                height = max_size;
+                            }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.drawImage(img, 0, 0, width, height);
+                            // Compress as JPEG to keep database payload small
+                            resolve(canvas.toDataURL('image/jpeg', 0.8));
+                        } else {
+                            resolve(reader.result as string); // fallback
+                        }
+                    };
+                    img.onerror = reject;
+                    img.src = event.target?.result as string;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        };
+
+        try {
+            const base64Images = await Promise.all(files.map(convertToBase64));
+            if (isSellMode && base64Images.length > 0) {
+                setPreviewImages([base64Images[0]]);
+            } else {
+                setPreviewImages(prev => [...prev, ...base64Images]);
+            }
+        } catch (err) {
+            console.error('Error generating image preview:', err);
+            alert('Failed to process image');
+        }
+    };
+
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const newImages = Array.from(e.target.files).map(file => URL.createObjectURL(file))
-            setPreviewImages(prev => [...prev, ...newImages])
+            processImages(Array.from(e.target.files), false);
         }
-    }
+    };
 
     const handleRemoveImage = (index: number) => {
-        setPreviewImages(prev => prev.filter((_, i) => i !== index))
-    }
+        setPreviewImages(prev => prev.filter((_, i) => i !== index));
+    };
 
     const filteredItems = items.filter(item =>
         item.cardName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -331,12 +384,10 @@ export default function Market() {
                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                         />
                                     </div>
-                                    <div className="absolute top-1 right-1 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white border border-white/10 italic z-10">
-                                        {item.condition}
-                                    </div>
-                                    {item.rarity && (
-                                        <div className="absolute top-1 left-1 bg-emerald-500/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-background-dark border border-emerald-400/50 z-10">
-                                            {item.rarity}
+                                    {/* We use regex to extract (Rarity) from cardName if present, otherwise fallback to item.rarity or 'Any Rarity' */}
+                                    {item.cardName && (
+                                        <div className="absolute top-1 left-1 bg-emerald-500/90 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-background-dark border border-emerald-400/50 z-10 max-w-[80%] truncate">
+                                            {item.cardName.match(/\(([^)]+)\)$/)?.[1] || item.rarity || 'Any Rarity'}
                                         </div>
                                     )}
                                     {user && item.userId === user.id && (
@@ -681,8 +732,7 @@ export default function Market() {
                                                                         if (newItem.type === 'sell') {
                                                                             // Enforce single image for sell mode
                                                                             if (e.target.files && e.target.files[0]) {
-                                                                                const file = e.target.files[0];
-                                                                                setPreviewImages([URL.createObjectURL(file)]);
+                                                                                processImages([e.target.files[0]], true);
                                                                             }
                                                                         } else {
                                                                             handleImageChange(e);
