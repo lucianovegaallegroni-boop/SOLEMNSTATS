@@ -238,14 +238,18 @@ export default function League() {
             const res = await fetch(`${API_BASE_URL}/api/players`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: activeConfigPlayer, cardNames })
+                body: JSON.stringify({ name: activeConfigPlayer, card_names: cardNames })
             })
             if (res.ok) {
                 setShowPlayerConfigModal(false)
                 fetchPlayerConfigs()
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Error: ${err.error || 'Failed to save player configuration'}`);
             }
         } catch (err) {
             console.error('Save player config failed:', err)
+            alert('Network error while saving player configuration');
         }
     }
 

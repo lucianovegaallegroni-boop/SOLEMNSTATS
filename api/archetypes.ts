@@ -17,15 +17,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // POST: Save archetype config (from save-archetype-config.ts)
     if (req.method === 'POST') {
-        const { name, card_names } = req.body;
-        if (!name || !Array.isArray(card_names)) {
+        const { name, cardNames, card_names } = req.body;
+        const names = cardNames || card_names;
+
+        if (!name || !Array.isArray(names)) {
             return res.status(400).json({ error: 'Missing name or card_names array' });
         }
 
         try {
             const { data, error } = await supabase
                 .from('archetype_configs')
-                .upsert({ name, card_names, updated_at: new Date() }, { onConflict: 'name' })
+                .upsert({ name, card_names: names, updated_at: new Date() }, { onConflict: 'name' })
                 .select();
 
             if (error) throw error;

@@ -14,14 +14,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-        const { name, cardNames } = req.body;
+        const { name, cardNames, card_names } = req.body;
+        const names = Array.isArray(cardNames) ? cardNames : (Array.isArray(card_names) ? card_names : []);
+
         if (!name) return res.status(400).json({ error: 'Missing player name' });
 
         const { data, error } = await supabaseClient
             .from('players')
             .upsert({
                 name,
-                card_names: cardNames || []
+                card_names: names
             }, { onConflict: 'name' })
             .select()
             .single();

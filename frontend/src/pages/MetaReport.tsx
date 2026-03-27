@@ -428,14 +428,18 @@ export default function MetaReport() {
             const res = await fetch('/api/archetypes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: activeConfigArchetype, cardNames })
+                body: JSON.stringify({ name: activeConfigArchetype, card_names: cardNames })
             })
             if (res.ok) {
                 setShowConfigModal(false)
                 fetchArchetypeConfigs()
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Error: ${err.error || 'Failed to save configuration'}`);
             }
         } catch (err) {
             console.error('Save failed:', err)
+            alert('Network error while saving configuration');
         }
     }
 
@@ -452,14 +456,18 @@ export default function MetaReport() {
             const res = await fetch('/api/players', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: activeConfigPlayer, cardNames })
+                body: JSON.stringify({ name: activeConfigPlayer, card_names: cardNames })
             })
             if (res.ok) {
                 setShowPlayerConfigModal(false)
                 fetchPlayerConfigs()
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Error: ${err.error || 'Failed to save player configuration'}`);
             }
         } catch (err) {
             console.error('Save player config failed:', err)
+            alert('Network error while saving player configuration');
         }
     }
 
