@@ -723,13 +723,20 @@ export default function MetaReport() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <span className="text-xs font-black text-white tracking-tight truncate group-hover:text-blue-primary transition-colors cursor-pointer" onClick={() => openConfigModal(item.name)}>{item.name}</span>
-                                                <button
-                                                    onClick={() => openConfigModal(item.name)}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded ml-2"
+                                                <span 
+                                                    className={`text-xs font-black text-white tracking-tight truncate ${isAuthorized ? 'group-hover:text-blue-primary transition-colors cursor-pointer' : ''}`} 
+                                                    onClick={() => isAuthorized && openConfigModal(item.name)}
                                                 >
-                                                    <span className="material-symbols-outlined text-[12px] text-slate-500">settings</span>
-                                                </button>
+                                                    {item.name}
+                                                </span>
+                                                {isAuthorized && (
+                                                    <button
+                                                        onClick={() => openConfigModal(item.name)}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded ml-2"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[12px] text-slate-500">settings</span>
+                                                    </button>
+                                                )}
                                             </div>
                                             <span className="text-xs font-black text-white">{item.percentage.toFixed(1)}%</span>
                                         </div>
@@ -791,13 +798,16 @@ export default function MetaReport() {
                                                 </td>
                                                 <td className="px-6 py-5 text-slate-500 font-medium">{tournament.date}</td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-3 cursor-pointer group/player" onClick={() => openPlayerConfigModal(result.playerName)}>
+                                                    <div 
+                                                        className={`flex items-center gap-3 ${isAuthorized ? 'cursor-pointer group/player' : ''}`} 
+                                                        onClick={() => isAuthorized && openPlayerConfigModal(result.playerName)}
+                                                    >
                                                         <ArchetypeAvatar
                                                             names={playerConfigs[result.playerName] || []}
                                                             metadata={cardMetadata}
                                                             size="size-7"
                                                         />
-                                                        <span className="font-bold text-slate-300 group-hover/player:text-blue-primary font-mono text-xs">{result.playerName}</span>
+                                                        <span className={`font-bold text-slate-300 ${isAuthorized ? 'group-hover/player:text-blue-primary' : ''} font-mono text-xs transition-colors`}>{result.playerName}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">

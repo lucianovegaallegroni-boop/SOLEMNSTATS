@@ -584,13 +584,16 @@ export default function League() {
                                                         <span className="text-slate-400 font-bold block">{idx + 1}</span>}
                                         </td>
                                         <td className="px-6 py-5">
-                                            <div className="flex items-center gap-3 cursor-pointer group/player" onClick={() => openPlayerConfigModal(player.player_name)}>
+                                            <div 
+                                                className={`flex items-center gap-3 ${isAuthorized ? 'cursor-pointer group/player' : ''}`} 
+                                                onClick={() => isAuthorized && openPlayerConfigModal(player.player_name)}
+                                            >
                                                 <ArchetypeAvatar
                                                     names={playerConfigs[player.player_name] || []}
                                                     metadata={cardMetadata}
                                                     size="size-8"
                                                 />
-                                                <span className="font-bold text-slate-100 group-hover/player:text-emerald-400 text-base">{player.player_name}</span>
+                                                <span className={`font-bold text-slate-100 ${isAuthorized ? 'group-hover/player:text-emerald-400' : ''} text-base`}>{player.player_name}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-5 text-center text-slate-400 font-medium">{player.tournaments_played}</td>
@@ -663,13 +666,16 @@ export default function League() {
                                             {tournament.league_results?.sort((a, b) => b.points - a.points).map((res) => (
                                                 <tr key={res.id} className="hover:bg-white/5">
                                                     <td className="px-6 py-3">
-                                                        <div className="flex items-center gap-3 cursor-pointer group/player" onClick={() => openPlayerConfigModal(res.player_name)}>
+                                                        <div 
+                                                            className={`flex items-center gap-3 ${isAuthorized ? 'cursor-pointer group/player' : ''}`} 
+                                                            onClick={() => isAuthorized && openPlayerConfigModal(res.player_name)}
+                                                        >
                                                             <ArchetypeAvatar
                                                                 names={playerConfigs[res.player_name] || []}
                                                                 metadata={cardMetadata}
                                                                 size="size-6"
                                                             />
-                                                            <span className="text-xs font-bold text-slate-300 group-hover/player:text-blue-primary transition-colors">{res.player_name}</span>
+                                                            <span className={`text-xs font-bold text-slate-300 ${isAuthorized ? 'group-hover/player:text-blue-primary' : ''} transition-colors`}>{res.player_name}</span>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 text-slate-400 font-black uppercase tracking-tighter">{res.placement}</td>
