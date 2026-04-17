@@ -2,11 +2,22 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { API_BASE_URL } from '../config'
 
+interface League {
+    id: string;
+    name: string;
+    points_participation: number;
+    points_1st: number;
+    points_2nd: number;
+    points_3rd: number;
+    created_at: string;
+}
+
 interface LeagueStanding {
     player_name: string;
     total_points: number;
     tournaments_played: number;
     last_active: string;
+    league_id: string;
 }
 
 interface Participant {
@@ -14,6 +25,8 @@ interface Participant {
     placement: string;
     archetype?: string;
     showInMeta?: boolean;
+    noPoints?: boolean;
+    points?: number;
 }
 
 interface LeagueResult {
@@ -29,6 +42,7 @@ interface LeagueTournament {
     id: string;
     name: string;
     date: string;
+    league_id: string;
     league_results: LeagueResult[];
 }
 
@@ -80,12 +94,26 @@ export default function League() {
     const [activeTab, setActiveTab] = useState<'leaderboard' | 'history'>('leaderboard')
     const [standings, setStandings] = useState<LeagueStanding[]>([])
     const [history, setHistory] = useState<LeagueTournament[]>([])
+    const [leagues, setLeagues] = useState<League[]>([])
+    const [selectedLeagueId, setSelectedLeagueId] = useState<string>('')
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
+    const [showLeagueModal, setShowLeagueModal] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [expandedTournamentId, setExpandedTournamentId] = useState<string | null>(null)
+    const [editingTournamentId, setEditingTournamentId] = useState<string | null>(null)
     const [savedPlayers, setSavedPlayers] = useState<string[]>([])
     const [savedDecks, setSavedDecks] = useState<string[]>([])
+    const [showAddPlayerModal, setShowAddPlayerModal] = useState(false)
+    const [newPlayerName, setNewPlayerName] = useState('')
+    const [addPlayerSubmitting, setAddPlayerSubmitting] = useState(false)
+
+    // League Form State
+    const [newLeagueName, setNewLeagueName] = useState('')
+    const [pointsParticipation, setPointsParticipation] = useState(3)
+    const [points1st, setPoints1st] = useState(9)
+    const [points2nd, setPoints2nd] = useState(6)
+    const [points3rd, setPoints3rd] = useState(3)
 
     // Player Config State
     const [playerConfigs, setPlayerConfigs] = useState<Record<string, string[]>>({})
@@ -98,15 +126,24 @@ export default function League() {
     const [tournamentName, setTournamentName] = useState('')
     const [tournamentDate, setTournamentDate] = useState(new Date().toISOString().split('T')[0])
     const [participants, setParticipants] = useState<Participant[]>([
-        { playerName: '', placement: '1st', archetype: '', showInMeta: true },
-        { playerName: '', placement: '2nd', archetype: '', showInMeta: true },
-        { playerName: '', placement: '3rd', archetype: '', showInMeta: true },
-        { playerName: '', placement: '4th', archetype: '', showInMeta: true }
+        { playerName: '', placement: '1st', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+        { playerName: '', placement: '2nd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+        { playerName: '', placement: '3rd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+        { playerName: '', placement: '4th', archetype: '', showInMeta: true, noPoints: false, points: 0 }
     ])
 
     useEffect(() => {
-        fetchData()
-    }, [activeTab])
+        const init = async () => {
+            await fetchLeagues()
+        }
+        init()
+    }, [])
+
+    useEffect(() => {
+        if (selectedLeagueId) {
+            fetchData()
+        }
+    }, [activeTab, selectedLeagueId])
 
     const fetchData = async () => {
         setLoading(true)
@@ -117,6 +154,21 @@ export default function League() {
             fetchPlayerConfigs()
         ])
         setLoading(false)
+    }
+
+    const fetchLeagues = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/league?view=leagues`)
+            const data = await res.json()
+            if (Array.isArray(data)) {
+                setLeagues(data)
+                if (data.length > 0 && !selectedLeagueId) {
+                    setSelectedLeagueId(data[0].id)
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch leagues:', err)
+        }
     }
 
     const fetchPlayerConfigs = async () => {
@@ -172,12 +224,12 @@ export default function League() {
 
     const fetchStandings = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/league`)
+            const res = await fetch(`${API_BASE_URL}/api/league?league_id=${selectedLeagueId}`)
             const data = await res.json()
             if (Array.isArray(data)) {
                 setStandings(data)
                 // Seed player autocomplete from standings
-                setSavedPlayers(prev => Array.from(new Set([...prev, ...data.map((p: any) => p.player_name)])))
+                setSavedPlayers((prev: string[]) => Array.from(new Set([...prev, ...data.map((p: any) => p.player_name)])))
             }
         } catch (err) {
             console.error('Failed to fetch standings:', err)
@@ -186,7 +238,7 @@ export default function League() {
 
     const fetchHistory = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/league?view=history`)
+            const res = await fetch(`${API_BASE_URL}/api/league?view=history&league_id=${selectedLeagueId}`)
             const data = await res.json()
             if (Array.isArray(data)) setHistory(data)
         } catch (err) {
@@ -209,13 +261,96 @@ export default function League() {
         }
     }
 
+    const createLeague = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSubmitting(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/league?view=leagues`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+                },
+                body: JSON.stringify({
+                    name: newLeagueName,
+                    points_participation: pointsParticipation,
+                    points_1st: points1st,
+                    points_2nd: points2nd,
+                    points_3rd: points3rd
+                })
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                setLeagues([...leagues, data])
+                setSelectedLeagueId(data.id)
+                setShowLeagueModal(false)
+                setNewLeagueName('')
+            } else {
+                const errData = await res.json()
+                alert(`Error: ${errData.error || 'Failed to create league'}`)
+            }
+        } catch (err) {
+            console.error('League creation failed:', err)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     const addParticipantRow = () => {
-        setParticipants([...participants, { playerName: '', placement: 'Participant', archetype: '', showInMeta: false }])
+        setParticipants([...participants, { playerName: '', placement: 'Participant', archetype: '', showInMeta: false, noPoints: false, points: 0 }])
+    }
+
+    const handleAddPlayer = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newPlayerName.trim()) return
+        setAddPlayerSubmitting(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/players`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newPlayerName.trim() })
+            })
+            if (res.ok) {
+                setShowAddPlayerModal(false)
+                setNewPlayerName('')
+                await fetchPlayerConfigs()
+                // Refresh savedPlayers list for autocomplete
+                const resPlayers = await fetch(`${API_BASE_URL}/api/players`)
+                const data = await resPlayers.json()
+                if (Array.isArray(data)) {
+                    setSavedPlayers(data.map((p: any) => p.name))
+                }
+            } else {
+                const err = await res.json()
+                alert(`Error: ${err.error || 'Failed to add player'}`)
+            }
+        } catch (err) {
+            console.error('Add player failed:', err)
+        } finally {
+            setAddPlayerSubmitting(false)
+        }
     }
 
     const handleParticipantChange = (index: number, field: keyof Participant, value: any) => {
         const updated = [...participants]
         updated[index] = { ...updated[index], [field]: value }
+
+        // Auto-calculate points if placement changes and they are not "noPoints"
+        if (field === 'placement' && !updated[index].noPoints) {
+            const league = leagues.find(l => l.id === selectedLeagueId);
+            if (league) {
+                let pts = league.points_participation || 0;
+                const place = String(value || '').toLowerCase();
+                
+                if (place === '1st' || place === '1' || place === 'winner') pts += (league.points_1st || 0);
+                else if (place === '2nd' || place === '2' || place === 'finalist') pts += (league.points_2nd || 0);
+                else if (place.includes('3rd') || place.includes('4th') || place === '3' || place === '4' || place.includes('top 4')) pts += (league.points_3rd || 0);
+                
+                updated[index].points = pts;
+            }
+        }
+
         setParticipants(updated)
     }
 
@@ -253,6 +388,30 @@ export default function League() {
         }
     }
 
+    const openEditModal = (tournament: LeagueTournament) => {
+        setEditingTournamentId(tournament.id)
+        setTournamentName(tournament.name)
+        setTournamentDate(new Date(tournament.date).toISOString().split('T')[0])
+        setSelectedLeagueId(tournament.league_id)
+
+        // Transform results back to participants
+        const transformedParticipants = tournament.league_results.map(res => ({
+            playerName: res.player_name,
+            placement: res.placement,
+            archetype: res.archetype || '',
+            points: res.points,
+            showInMeta: res.show_in_meta,
+            noPoints: false
+        }))
+
+        while (transformedParticipants.length < 4) {
+             transformedParticipants.push({ playerName: '', placement: 'Participant', archetype: '', showInMeta: false, noPoints: false, points: 0 })
+        }
+        
+        setParticipants(transformedParticipants)
+        setShowModal(true)
+    }
+
     const submitTournament = async (e: React.FormEvent) => {
         e.preventDefault()
         const validParticipants = participants.filter(p => p.playerName.trim() !== '')
@@ -261,29 +420,40 @@ export default function League() {
             return
         }
 
+        if (!selectedLeagueId) {
+            alert('Select a league first')
+            return
+        }
+
         setSubmitting(true)
         try {
+            const method = editingTournamentId ? 'PUT' : 'POST'
+            const body = {
+                id: editingTournamentId,
+                league_id: selectedLeagueId,
+                tournamentName,
+                date: tournamentDate,
+                participants: validParticipants
+            }
+
             const res = await fetch(`${API_BASE_URL}/api/league`, {
-                method: 'POST',
+                method,
                 headers: {
                     'Content-Type': 'application/json',
                     ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
-                body: JSON.stringify({
-                    tournamentName,
-                    date: tournamentDate,
-                    participants: validParticipants
-                })
+                body: JSON.stringify(body)
             })
 
             if (res.ok) {
                 setShowModal(false)
+                setEditingTournamentId(null)
                 setTournamentName('')
                 setParticipants([
-                    { playerName: '', placement: '1st', archetype: '', showInMeta: true },
-                    { playerName: '', placement: '2nd', archetype: '', showInMeta: true },
-                    { playerName: '', placement: '3rd', archetype: '', showInMeta: true },
-                    { playerName: '', placement: '4th', archetype: '', showInMeta: true }
+                    { playerName: '', placement: '1st', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                    { playerName: '', placement: '2nd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                    { playerName: '', placement: '3rd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                    { playerName: '', placement: '4th', archetype: '', showInMeta: true, noPoints: false, points: 0 }
                 ])
                 if (activeTab === 'leaderboard') fetchStandings()
                 else fetchHistory()
@@ -306,7 +476,7 @@ export default function League() {
                     <h1 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">
                         Competitive <span className="text-emerald-500">League</span>
                     </h1>
-                    <div className="flex gap-4 mt-4">
+                    <div className="flex flex-wrap gap-4 mt-4">
                         <button
                             onClick={() => setActiveTab('leaderboard')}
                             className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-md transition-all ${activeTab === 'leaderboard' ? 'bg-emerald-500 text-background-dark shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-300'}`}
@@ -319,18 +489,62 @@ export default function League() {
                         >
                             History
                         </button>
+                        
+                        {/* League Selector */}
+                        <div className="flex items-center gap-2 ml-2 border-l border-white/10 pl-4">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Active League:</span>
+                            <select 
+                                value={selectedLeagueId} 
+                                onChange={(e) => setSelectedLeagueId(e.target.value)}
+                                className="bg-slate-900 border border-white/10 rounded-md px-3 py-1 text-[10px] font-black text-emerald-400 uppercase outline-none focus:border-emerald-500/50"
+                            >
+                                {leagues.map(l => (
+                                    <option key={l.id} value={l.id}>{l.name}</option>
+                                ))}
+                                {leagues.length === 0 && <option value="">No leagues found</option>}
+                            </select>
+                        </div>
                     </div>
                 </div>
 
-                {isAuthorized && (
-                    <button
-                        onClick={() => setShowModal(true)}
-                        className="bg-emerald-500 hover:bg-emerald-400 text-background-dark px-5 py-3 rounded-lg text-sm font-black uppercase italic tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-1"
-                    >
-                        <span className="material-icons text-sm">add_circle</span>
-                        Register Tournament
-                    </button>
-                )}
+                <div className="flex gap-3">
+                    {isAuthorized && (
+                        <>
+                            <button
+                                onClick={() => setShowAddPlayerModal(true)}
+                                className="bg-sky-500 hover:bg-sky-400 text-background-dark px-5 py-3 rounded-lg text-xs font-black uppercase italic tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-sky-500/20 border border-white/5"
+                            >
+                                <span className="material-icons text-sm">person_add</span>
+                                + Jugador
+                            </button>
+                            <button
+                                onClick={() => setShowLeagueModal(true)}
+                                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-3 rounded-lg text-xs font-black uppercase italic tracking-widest flex items-center gap-2 transition-all border border-white/5"
+                            >
+                                <span className="material-icons text-sm">settings</span>
+                                New League
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setEditingTournamentId(null)
+                                    setTournamentName('')
+                                    setTournamentDate(new Date().toISOString().split('T')[0])
+                                    setParticipants([
+                                        { playerName: '', placement: '1st', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                                        { playerName: '', placement: '2nd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                                        { playerName: '', placement: '3rd', archetype: '', showInMeta: true, noPoints: false, points: 0 },
+                                        { playerName: '', placement: '4th', archetype: '', showInMeta: true, noPoints: false, points: 0 }
+                                    ])
+                                    setShowModal(true)
+                                }}
+                                className="bg-emerald-500 hover:bg-emerald-400 text-background-dark px-5 py-3 rounded-lg text-sm font-black uppercase italic tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-1"
+                            >
+                                <span className="material-icons text-sm">add_circle</span>
+                                Register Tournament
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Content Area */}
@@ -339,7 +553,9 @@ export default function League() {
                 <div className="glass rounded-xl overflow-hidden shadow-2xl border border-emerald-500/10 relative">
                     <div className="p-6 border-b border-emerald-500/10 flex justify-between items-center bg-slate-900/50">
                         <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight italic">Standings</h2>
+                            <h2 className="text-xl font-bold text-white tracking-tight italic">
+                                {leagues.find(l => l.id === selectedLeagueId)?.name || 'Standings'}
+                            </h2>
                             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Current Circuit</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -412,13 +628,22 @@ export default function League() {
                                         <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">{tournament.league_results?.length} Players</span>
                                     </div>
                                     {isAuthorized && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); deleteTournament(tournament.id); }}
-                                            className="text-slate-600 hover:text-red-500 transition-colors p-2"
-                                            title="Delete Tournament"
-                                        >
-                                            <span className="material-icons text-sm">delete</span>
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); openEditModal(tournament); }}
+                                                className="text-slate-600 hover:text-sky-500 transition-colors p-2"
+                                                title="Edit Tournament"
+                                            >
+                                                <span className="material-icons text-sm">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); deleteTournament(tournament.id); }}
+                                                className="text-slate-600 hover:text-red-500 transition-colors p-2"
+                                                title="Delete Tournament"
+                                            >
+                                                <span className="material-icons text-sm">delete</span>
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -463,23 +688,113 @@ export default function League() {
                 </div>
             )}
 
+            {/* Modal for creating a new league */}
+            {showLeagueModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                            <h2 className="text-xl font-black uppercase text-white tracking-widest italic">Create New League</h2>
+                            <button onClick={() => setShowLeagueModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <span className="material-icons">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={createLeague} className="p-6 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">League Name</label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    value={newLeagueName} 
+                                    onChange={e => setNewLeagueName(e.target.value)} 
+                                    className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
+                                    placeholder="e.g. Summer Season 2026" 
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Participation Pts</label>
+                                    <input 
+                                        type="number" 
+                                        required 
+                                        value={pointsParticipation} 
+                                        onChange={e => setPointsParticipation(parseInt(e.target.value))} 
+                                        className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">1st Place Pts</label>
+                                    <input 
+                                        type="number" 
+                                        required 
+                                        value={points1st} 
+                                        onChange={e => setPoints1st(parseInt(e.target.value))} 
+                                        className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">2nd Place Pts</label>
+                                    <input 
+                                        type="number" 
+                                        required 
+                                        value={points2nd} 
+                                        onChange={e => setPoints2nd(parseInt(e.target.value))} 
+                                        className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">3rd/4th Place Pts</label>
+                                    <input 
+                                        type="number" 
+                                        required 
+                                        value={points3rd} 
+                                        onChange={e => setPoints3rd(parseInt(e.target.value))} 
+                                        className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-4 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowLeagueModal(false)} className="px-5 py-2 text-slate-400 font-black uppercase tracking-widest text-[10px]">Cancel</button>
+                                <button type="submit" disabled={submitting} className="bg-emerald-500 hover:bg-emerald-400 text-background-dark px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">
+                                    {submitting ? 'Creating...' : 'Create League'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* Modal for adding tournament results */}
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
                     <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl my-auto">
                         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
                             <div>
-                                <h2 className="text-xl font-black uppercase text-white tracking-widest italic">Register Tournament</h2>
+                                <h2 className="text-xl font-black uppercase text-white tracking-widest italic">{editingTournamentId ? 'Edit Tournament' : 'Register Tournament'}</h2>
                                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Automatic League & Meta Integration</p>
                             </div>
-                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                            <button onClick={() => { setShowModal(false); setEditingTournamentId(null); }} className="text-slate-400 hover:text-white transition-colors">
                                 <span className="material-icons">close</span>
                             </button>
                         </div>
 
                         <form onSubmit={submitTournament} className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">League</label>
+                                    <select 
+                                        value={selectedLeagueId} 
+                                        onChange={(e) => setSelectedLeagueId(e.target.value)}
+                                        className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors"
+                                    >
+                                        {leagues.map(l => (
+                                            <option key={l.id} value={l.id}>{l.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
                                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Event Name</label>
                                     <input type="text" required value={tournamentName} onChange={e => setTournamentName(e.target.value)} className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" placeholder="e.g. OTS Local Championship" />
                                 </div>
@@ -534,19 +849,43 @@ export default function League() {
                                                 />
                                             </div>
 
-                                            {/* Report to Meta Toggle (only for Tops) */}
-                                            {['1st', '2nd', '3rd', '4th', 'Winner', 'Finalist'].includes(p.placement) && (
-                                                <div className="flex items-center gap-2 bg-blue-primary/10 px-3 py-2 rounded-md border border-blue-primary/20">
+                                            <div className="w-16">
+                                                <input
+                                                    type="number"
+                                                    placeholder="Pts"
+                                                    value={p.points}
+                                                    onChange={e => handleParticipantChange(index, 'points', parseInt(e.target.value) || 0)}
+                                                    className="w-full bg-slate-900 border border-white/5 rounded-md px-2 py-2 text-white text-center text-xs font-black focus:border-emerald-500/50 outline-none"
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center gap-4">
+                                                {/* No Points Toggle */}
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-white/5">
                                                     <input
                                                         type="checkbox"
-                                                        id={`meta-${index}`}
-                                                        checked={p.showInMeta}
-                                                        onChange={e => handleParticipantChange(index, 'showInMeta', e.target.checked)}
-                                                        className="size-3 rounded border-white/20 bg-slate-900 text-blue-primary focus:ring-blue-primary active:ring-blue-primary"
+                                                        id={`no-points-${index}`}
+                                                        checked={p.noPoints}
+                                                        onChange={e => handleParticipantChange(index, 'noPoints', e.target.checked)}
+                                                        className="size-3 rounded border-white/20 bg-slate-900 text-red-500 focus:ring-red-500"
                                                     />
-                                                    <label htmlFor={`meta-${index}`} className="text-[9px] font-black text-blue-primary uppercase tracking-widest cursor-pointer whitespace-nowrap">Report Meta</label>
+                                                    <label htmlFor={`no-points-${index}`} className="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer whitespace-nowrap">No Points</label>
                                                 </div>
-                                            )}
+
+                                                {/* Report to Meta Toggle (only for Tops) */}
+                                                {['1st', '2nd', '3rd', '4th', 'Winner', 'Finalist'].includes(p.placement) && (
+                                                    <div className="flex items-center gap-2 bg-blue-primary/10 px-3 py-2 rounded-md border border-blue-primary/20">
+                                                        <input
+                                                            type="checkbox"
+                                                            id={`meta-${index}`}
+                                                            checked={p.showInMeta}
+                                                            onChange={e => handleParticipantChange(index, 'showInMeta', e.target.checked)}
+                                                            className="size-3 rounded border-white/20 bg-slate-900 text-blue-primary focus:ring-blue-primary active:ring-blue-primary"
+                                                        />
+                                                        <label htmlFor={`meta-${index}`} className="text-[9px] font-black text-blue-primary uppercase tracking-widest cursor-pointer whitespace-nowrap">Report Meta</label>
+                                                    </div>
+                                                )}
+                                            </div>
 
                                             <button type="button" onClick={() => removeParticipant(index)} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
                                                 <span className="material-icons text-sm">delete</span>
@@ -557,8 +896,8 @@ export default function League() {
                             </div>
 
                             <div className="pt-4 border-t border-white/10 flex justify-end gap-3 items-center">
-                                <p className="text-[10px] text-slate-500 font-bold italic mr-auto">Check "Report Meta" to auto-populate the Meta Intelligence tab.</p>
-                                <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2 rounded-lg text-sm font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Cancel</button>
+                                <p className="text-[10px] text-slate-500 font-bold italic mr-auto">Check "No Points" to exclude player from league rewards.</p>
+                                <button type="button" onClick={() => { setShowModal(false); setEditingTournamentId(null); }} className="px-5 py-2 rounded-lg text-sm font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Cancel</button>
                                 <button type="submit" disabled={submitting} className="bg-emerald-500 hover:bg-emerald-400 text-background-dark px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 disabled:opacity-50">
                                     {submitting ? 'Saving...' : 'Sync Tournament'}
                                 </button>
@@ -569,11 +908,55 @@ export default function League() {
             )}
 
             <datalist id="player-list">
-                {savedPlayers.map(name => <option key={name} value={name} />)}
+                {savedPlayers.map((name: string) => <option key={name} value={name} />)}
             </datalist>
             <datalist id="deck-list">
                 {savedDecks.map(name => <option key={name} value={name} />)}
             </datalist>
+
+            {showAddPlayerModal && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                            <h2 className="text-xl font-black uppercase text-white tracking-widest italic">Registrar Nuevo Jugador</h2>
+                            <button onClick={() => setShowAddPlayerModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <span className="material-icons">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAddPlayer} className="p-6 space-y-6">
+                            <div className="space-y-4 text-center py-4">
+                                <div className="size-20 bg-sky-500/10 rounded-full flex items-center justify-center border border-sky-500/30 mx-auto">
+                                    <span className="material-icons text-sky-500 text-3xl">person_add</span>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Añadir miembro a la comunidad</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Nombre del Jugador</label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    autoFocus
+                                    value={newPlayerName} 
+                                    onChange={e => setNewPlayerName(e.target.value)} 
+                                    className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-3 text-white focus:border-sky-500/50 outline-none transition-colors font-bold" 
+                                    placeholder="e.g. Seto Kaiba" 
+                                />
+                            </div>
+
+                            <div className="pt-4 flex flex-col gap-3">
+                                <button type="submit" disabled={addPlayerSubmitting} className="w-full bg-sky-500 hover:bg-sky-400 text-background-dark py-4 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-500/20 transition-all">
+                                    {addPlayerSubmitting ? 'Registrando...' : 'Agregar Jugador'}
+                                </button>
+                                <button type="button" onClick={() => setShowAddPlayerModal(false)} className="w-full py-2 text-slate-500 font-black uppercase tracking-widest text-[9px] hover:text-white transition-colors">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {showPlayerConfigModal && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
