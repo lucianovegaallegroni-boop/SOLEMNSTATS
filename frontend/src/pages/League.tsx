@@ -724,8 +724,9 @@ export default function League() {
                                     <input 
                                         type="number" 
                                         required 
+                                        step="0.01"
                                         value={pointsParticipation} 
-                                        onChange={e => setPointsParticipation(parseInt(e.target.value))} 
+                                        onChange={e => setPointsParticipation(parseFloat(e.target.value))} 
                                         className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
                                     />
                                 </div>
@@ -734,8 +735,9 @@ export default function League() {
                                     <input 
                                         type="number" 
                                         required 
+                                        step="0.01"
                                         value={points1st} 
-                                        onChange={e => setPoints1st(parseInt(e.target.value))} 
+                                        onChange={e => setPoints1st(parseFloat(e.target.value))} 
                                         className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
                                     />
                                 </div>
@@ -744,8 +746,9 @@ export default function League() {
                                     <input 
                                         type="number" 
                                         required 
+                                        step="0.01"
                                         value={points2nd} 
-                                        onChange={e => setPoints2nd(parseInt(e.target.value))} 
+                                        onChange={e => setPoints2nd(parseFloat(e.target.value))} 
                                         className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
                                     />
                                 </div>
@@ -754,8 +757,9 @@ export default function League() {
                                     <input 
                                         type="number" 
                                         required 
+                                        step="0.01"
                                         value={points3rd} 
-                                        onChange={e => setPoints3rd(parseInt(e.target.value))} 
+                                        onChange={e => setPoints3rd(parseFloat(e.target.value))} 
                                         className="w-full bg-slate-800 border border-white/5 rounded-lg px-4 py-2.5 text-white focus:border-emerald-500/50 outline-none transition-colors" 
                                     />
                                 </div>
@@ -859,8 +863,9 @@ export default function League() {
                                                 <input
                                                     type="number"
                                                     placeholder="Pts"
+                                                    step="0.01"
                                                     value={p.points}
-                                                    onChange={e => handleParticipantChange(index, 'points', parseInt(e.target.value) || 0)}
+                                                    onChange={e => handleParticipantChange(index, 'points', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-slate-900 border border-white/5 rounded-md px-2 py-2 text-white text-center text-xs font-black focus:border-emerald-500/50 outline-none"
                                                 />
                                             </div>
